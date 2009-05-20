@@ -1,0 +1,34 @@
+/BlockBoxing.java/1.68/Fri Jan 23 22:32:07 2009//
+/BlockFormattingContext.java/1.45/Mon Mar 12 21:11:21 2007//
+/BoxBuilder.java/1.36/Thu Sep 18 23:55:28 2008/-kk/
+/BoxCollector.java/1.8/Sun Aug 19 22:22:52 2007/-kk/
+/BoxRange.java/1.2/Sun Aug 19 23:53:44 2007//
+/BoxRangeData.java/1.2/Sun Aug 19 23:53:44 2007//
+/BoxRangeHelper.java/1.2/Sun Aug 19 23:53:44 2007//
+/BoxRangeLists.java/1.2/Sun Aug 19 23:53:44 2007//
+/BreakAtLineContext.java/1.1/Sun Dec 14 13:53:30 2008//
+/Breaker.java/1.13/Thu Jun 14 16:11:57 2007/-kk/
+/CollapsedBorderSide.java/1.4/Mon Mar 12 21:11:21 2007//
+/CounterFunction.java/1.3/Tue Jun 19 10:51:26 2007//
+/FloatLayoutResult.java/1.4/Mon Mar 12 21:11:22 2007/-kk/
+/FloatManager.java/1.31/Thu Apr 12 12:24:55 2007/-kk/
+/FunctionData.java/1.4/Sat Mar 17 22:14:49 2007/-kk/
+/InlineBoxMeasurements.java/1.5/Thu May 10 00:43:55 2007/-kk/
+/InlineBoxing.java/1.142/Sun Dec 14 13:53:30 2008//
+/InlinePaintable.java/1.2/Mon Mar 12 21:11:22 2007/-kk/
+/Layer.java/1.77/Mon Nov 10 23:43:48 2008/-kk/
+/LayoutContext.java/1.52/Sun Dec 14 13:53:30 2008//
+/LayoutState.java/1.5/Sun Aug 19 22:22:52 2007/-kk/
+/LayoutUtil.java/1.63/Sun Aug 19 22:22:52 2007/-kk/
+/LineBreakContext.java/1.7/Sun Nov 11 11:57:25 2007/-kk/
+/PaintingInfo.java/1.2/Thu Mar 15 23:21:16 2007//
+/PersistentBFC.java/1.19/Thu Mar 15 23:21:16 2007//
+/SharedContext.java/1.45/Sun Feb 15 17:17:23 2009//
+/StyleTracker.java/1.6/Thu Mar 15 23:21:16 2007/-kk/
+/Styleable.java/1.5/Thu Mar 15 23:21:16 2007/-kk/
+/TextUtil.java/1.11/Wed Feb  7 16:33:33 2007//
+/VerticalAlignContext.java/1.9/Mon Jun 25 00:15:05 2007/-kk/
+/WhitespaceStripper.java/1.4/Sun Aug 19 22:22:52 2007//
+D/block////
+D/content////
+D/inline////
