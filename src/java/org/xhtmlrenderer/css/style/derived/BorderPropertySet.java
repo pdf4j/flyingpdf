@@ -114,10 +114,14 @@ public class BorderPropertySet extends RectPropertySet {
      */
     public BorderPropertySet lighten(IdentValue style) {
         BorderPropertySet bc = new BorderPropertySet(this);
-        bc._topColor = _topColor.lightenColor();
-        bc._bottomColor = _bottomColor.lightenColor();
-        bc._leftColor = _leftColor.lightenColor();
-        bc._rightColor = _rightColor.lightenColor();
+        if (_topColor != null)
+            bc._topColor = _topColor.lightenColor();
+        if (_bottomColor != null)
+            bc._bottomColor = _bottomColor.lightenColor();
+        if (_leftColor != null)
+            bc._leftColor = _leftColor.lightenColor();
+        if (_rightColor != null)
+            bc._rightColor = _rightColor.lightenColor();
 
         return bc;
     }
@@ -130,10 +134,14 @@ public class BorderPropertySet extends RectPropertySet {
      */
     public BorderPropertySet darken(IdentValue style) {
         BorderPropertySet bc = new BorderPropertySet(this);
-        bc._topColor = _topColor.darkenColor();
-        bc._bottomColor = _bottomColor.darkenColor();
-        bc._leftColor = _leftColor.darkenColor();
-        bc._rightColor = _rightColor.darkenColor();
+        if (_topColor != null)
+            bc._topColor = _topColor.darkenColor();
+        if (_bottomColor != null)
+            bc._bottomColor = _bottomColor.darkenColor();
+        if (_leftColor != null)
+            bc._leftColor = _leftColor.darkenColor();
+        if (_rightColor != null)
+            bc._rightColor = _rightColor.darkenColor();
         return bc;
     }
 
