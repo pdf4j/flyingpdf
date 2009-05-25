@@ -34,6 +34,8 @@ public class Conversions {
     private static final Map BORDER_WIDTHS = new HashMap();
     
     static {
+        COLORS.put("cyan", new FSRGBColor(0x00FFFF));
+        COLORS.put("magenta", new FSRGBColor(0xFF00FF));
         COLORS.put("black",new FSRGBColor(0x000000));
         COLORS.put("gray",new FSRGBColor(0x808080));
         COLORS.put("grey",new FSRGBColor(0x808080));

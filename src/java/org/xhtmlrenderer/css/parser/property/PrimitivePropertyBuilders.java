@@ -1014,6 +1014,12 @@ public class PrimitivePropertyBuilders {
        }
     }
     
+    public static class FSFitImagesToWidth extends LengthLikeWithAuto {
+        protected boolean isNegativeValuesAllowed() {
+            return false;
+        }
+     }
+    
     public static class Height extends LengthLikeWithAuto {
         protected boolean isNegativeValuesAllowed() {
             return false;
