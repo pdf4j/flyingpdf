@@ -349,7 +349,9 @@ public final class CSSName implements Comparable {
                     NOT_INHERITED,
                     new PrimitivePropertyBuilders.FSTextDecorationExtent()
             );
-    
+    /**
+     * Used for forcing images to scale to a certain width
+     */
     public final static CSSName FS_FIT_IMAGES_TO_WIDTH = 
         addProperty(
                 "-fs-fit-images-to-width",
