@@ -9,7 +9,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.xhtmlrenderer</groupId>
     <artifactId>xhtmlrenderer</artifactId>
-    <version>8.2-atlassian</version>   
+    <version>8.3-atlassian-SNAPSHOT</version>   
     
     <distributionManagement>
         <repository>
