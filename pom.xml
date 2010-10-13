@@ -1,15 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 
     
 
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.xhtmlrenderer</groupId>
     <artifactId>xhtmlrenderer</artifactId>
-    <version>8.3-atlassian-SNAPSHOT</version>   
+    <version>8.3-atlassian</version>   
     <packaging>pom</packaging>
     <distributionManagement>
         <repository>
@@ -25,22 +23,23 @@
     </distributionManagement>
 
     <scm>
-        <connection>scm:svn:https://svn.atlassian.com/svn/public/atlassian/vendor/xhtmlrenderer-8.0/trunk</connection>
-        <developerConnection>scm:svn:https://svn.atlassian.com/svn/public/atlassian/vendor/xhtmlrenderer-8.0/trunk</developerConnection>
-        <url>https://svn.atlassian.com/svn/public/atlassian/vendor/xhtmlrenderer-8.0/trunk</url>
+        <connection>scm:svn:https://svn.atlassian.com/svn/public/atlassian/vendor/xhtmlrenderer-8.0/tags/8.3-atlassian</connection>
+        <developerConnection>scm:svn:https://svn.atlassian.com/svn/public/atlassian/vendor/xhtmlrenderer-8.0/tags/8.3-atlassian</developerConnection>
+        <url>https://svn.atlassian.com/svn/public/atlassian/vendor/xhtmlrenderer-8.0/tags/8.3-atlassian</url>
     </scm>
 
     <build>
         <plugins>
             <plugin>
                 <artifactId>maven-antrun-plugin</artifactId>
+                <version>1.6</version>
                 <executions>
                     <execution>
                         <phase>process-resources</phase>
                         <configuration>
                             <tasks>
-                                <ant antfile="build.xml" target="clean"/>
-                                <ant antfile="build.xml" target="jar"/>
+                                <ant antfile="build.xml" target="clean" />
+                                <ant antfile="build.xml" target="jar" />
                             </tasks>
                         </configuration>
                         <goals>
@@ -73,5 +72,32 @@
             </plugin>
         </plugins>
     </build>
-
-</project>
+    <profiles>
+        <profile>
+            <id>tools.jar</id>
+            <activation>
+                <property>
+                    <name>java.vendor</name>
+                    <value>Sun Microsystems Inc.</value>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <dependencies>
+                            <dependency>
+                                <groupId>com.sun</groupId>
+                                <artifactId>tools</artifactId>
+                                <version>1.6.0</version>
+                                <scope>system</scope>
+                                <systemPath>${java.home}/../lib/tools.jar</systemPath>
+                            </dependency>
+                        </dependencies>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+    </project>
