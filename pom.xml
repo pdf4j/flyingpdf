@@ -10,7 +10,7 @@
     <groupId>org.xhtmlrenderer</groupId>
     <artifactId>xhtmlrenderer</artifactId>
     <version>8.3-atlassian-SNAPSHOT</version>   
-    
+    <packaging>pom</packaging>
     <distributionManagement>
         <repository>
             <id>atlassian-contrib</id>
@@ -22,5 +22,50 @@
             <name>Atlassian Private Snapshot Repository</name>
             <url>dav:https://maven.atlassian.com/private-snapshot</url>
         </snapshotRepository>
-    </distributionManagement> 
+    </distributionManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>process-resources</phase>
+                        <configuration>
+                            <tasks>
+                                <ant antfile="build.xml" target="clean"/>
+                                <ant antfile="build.xml" target="jar"/>
+                            </tasks>
+                        </configuration>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>1.3</version>
+                <executions>
+                    <execution>
+                        <id>add-jar</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>attach-artifact</goal>
+                        </goals>
+                        <configuration>
+                            <artifacts>
+                                <artifact>
+                                    <file>${project.basedir}/build/core-renderer.jar</file>
+                                    <type>jar</type>
+                                </artifact>
+                            </artifacts>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
 </project>
