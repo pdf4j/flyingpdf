@@ -67,7 +67,7 @@
 	
 	<!-- Compiler flags -->
 	<!-- For details on each flag, see http://ant.apache.org/manual/CoreTasks/javac.html -->
-  <property name="build.compiler" value="modern"/>
+  <property name="build.compiler" value="extJavac"/>
   <property name="compiler.debug" value="true"/>
   <property name="compiler.debuglevel" value="lines,vars,source"/>
   <property name="compiler.deprecation" value="off"/>
