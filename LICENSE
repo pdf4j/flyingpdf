@@ -38,8 +38,8 @@ Not packaged with release; development using version 1.6.x
 iText (PDF generation)
 http://www.lowagie.com/iText/ and http://itextpdf.sourceforge.net/
 License: Mozilla Public License Version 1.1
-Using version 2.0.8.
-Included as lib/iText-2.0.8.jar
+Using version 2.1.7.
+Included as lib/iText-2.1.7.jar
 
 SVGSalamander (SVG rendering in demo)
 https://svgsalamander.dev.java.net/
