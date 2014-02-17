@@ -11,9 +11,9 @@
     <packaging>pom</packaging>
     <distributionManagement>
         <repository>
-            <id>atlassian-contrib</id>
-            <name>Atlassian Contrib Repository</name>
-            <url>dav:https://maven.atlassian.com/contrib</url>
+            <id>atlassian-public</id>
+            <name>Atlassian Public Repository</name>
+            <url>dav:https://maven.atlassian.com/public</url>
         </repository>
         <snapshotRepository>
             <id>atlassian-private-snapshot</id>
