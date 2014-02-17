@@ -7,7 +7,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.xhtmlrenderer</groupId>
     <artifactId>xhtmlrenderer</artifactId>
-    <version>8.5-atlassian-SNAPSHOT</version>   
+    <version>8.5-atlassian</version>   
     <packaging>pom</packaging>
     <distributionManagement>
         <repository>
@@ -23,9 +23,9 @@
     </distributionManagement>
 
     <scm>
-        <connection>scm:svn:https://svn.atlassian.com/svn/public/atlassian/vendor/xhtmlrenderer-8.0/trunk</connection>
-        <developerConnection>scm:svn:https://svn.atlassian.com/svn/public/atlassian/vendor/xhtmlrenderer-8.0/trunk</developerConnection>
-        <url>https://svn.atlassian.com/svn/public/atlassian/vendor/xhtmlrenderer-8.0/trunk</url>
+        <connection>scm:svn:https://svn.atlassian.com/svn/public/atlassian/vendor/xhtmlrenderer-8.0/tags/8.5-atlassian</connection>
+        <developerConnection>scm:svn:https://svn.atlassian.com/svn/public/atlassian/vendor/xhtmlrenderer-8.0/tags/8.5-atlassian</developerConnection>
+        <url>https://svn.atlassian.com/svn/public/atlassian/vendor/xhtmlrenderer-8.0/tags/8.5-atlassian</url>
     </scm>
 
     <build>
