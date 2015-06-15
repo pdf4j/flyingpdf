@@ -100,17 +100,17 @@ public class DemoUserAgent implements UserAgentCallback {
             if (is != null) {
                 try {
                     BufferedImage img = ImageIO.read(is);
-                    ir = new ImageResource(AWTFSImage.createLegacyImage(img));
+                    ir = new ImageResource(uri, AWTFSImage.createImage(img));
                     imageCache.put(uri, ir);
                 } catch (IOException e) {
                     XRLog.exception("Can't read image file; unexpected problem for URI '" + uri + "'", e);
                 }
             }
         }
-        if (ir == null) ir = new ImageResource(null);
+        if (ir == null) ir = new ImageResource(uri, null);
         return ir;
     }
-    
+
     public byte[] getBinaryResource(String uri) {
         InputStream is = null;
         try {
@@ -125,7 +125,7 @@ public class DemoUserAgent implements UserAgentCallback {
             }
             is.close();
             is = null;
-            
+
             return result.toByteArray();
         } catch (IOException e) {
             return null;
@@ -138,7 +138,7 @@ public class DemoUserAgent implements UserAgentCallback {
                 }
             }
         }
-    }    
+    }
 
     public XMLResource getXMLResource(String uri) {
         uri = resolveURI(uri);
@@ -155,8 +155,7 @@ public class DemoUserAgent implements UserAgentCallback {
         try {
             URLConnection uc = new URL(uri).openConnection();
             uc.connect();
-            String contentType = uc.getContentType();
-            //Maybe should popup a choice when content/unknown!
+            // TODO: String contentType = uc.getContentType(); Maybe should popup a choice when content/unknown!
             inputStream = uc.getInputStream();
             xr = XMLResource.load(inputStream);
         } catch (MalformedURLException e) {

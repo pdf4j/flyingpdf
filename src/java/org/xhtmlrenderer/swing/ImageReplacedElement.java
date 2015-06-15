@@ -32,9 +32,12 @@ import org.xhtmlrenderer.util.ImageUtil;
  * container for images included within XML being rendered. The image contained is immutable.
  */
 public class ImageReplacedElement implements ReplacedElement {
-    private final Image _image;
-    
+    protected Image _image;
+
     private Point _location = new Point(0, 0);
+
+    protected ImageReplacedElement() {
+    }
 
     /**
      * Creates a new ImageReplacedElement and scales it to the size specified if either width or height has a valid
@@ -47,34 +50,34 @@ public class ImageReplacedElement implements ReplacedElement {
      * @param targetHeight The height we'd like the image to have, in pixels.
      */
     public ImageReplacedElement(Image image, int targetWidth, int targetHeight) {
-		if (targetWidth > 0 || targetHeight > 0) {
+        if (targetWidth > 0 || targetHeight > 0) {
             int w = image.getWidth(null);
             int h = image.getHeight(null);
-            
-		    int newW = targetWidth;
-		    int newH = targetHeight;
-		    
-		    if (newW == -1) {
-		        newW = (int)(w * ((double)newH / h));
-		    }
-		    
-	        if (newH == -1) {
-	            newH = (int)(h * ((double)newW / w));
-	        }
-	        
-			if (w != newW || h != newH) {
+
+            int newW = targetWidth;
+            int newH = targetHeight;
+
+            if (newW == -1) {
+                newW = (int)(w * ((double)newH / h));
+            }
+
+            if (newH == -1) {
+                newH = (int)(h * ((double)newW / w));
+            }
+
+            if (w != newW || h != newH) {
                 if (image instanceof BufferedImage) {
                     image = ImageUtil.getScaledInstance((BufferedImage) image, newW, newH);
                 } else {
-                   String scalingType = Configuration.valueFor("xr.image.scale", "HIGH").trim() ;  
-                    
-                   if(scalingType.equalsIgnoreCase("HIGH") || scalingType.equalsIgnoreCase("MID") ){
-                       image = image.getScaledInstance(newW, newH, Image.SCALE_SMOOTH);
-                   } else{
-                    image = image.getScaledInstance(newW, newH, Image.SCALE_FAST);
+                    String scalingType = Configuration.valueFor("xr.image.scale", "HIGH").trim() ;
+
+                    if(scalingType.equalsIgnoreCase("HIGH") || scalingType.equalsIgnoreCase("MID") ){
+                        image = image.getScaledInstance(newW, newH, Image.SCALE_SMOOTH);
+                    } else{
+                        image = image.getScaledInstance(newW, newH, Image.SCALE_FAST);
+                    }
                 }
             }
-        }
         }
         _image = image;
     }
@@ -117,11 +120,11 @@ public class ImageReplacedElement implements ReplacedElement {
         return _image;
     }
 
-	public int getBaseline() {
-		return 0;
-	}
+    public int getBaseline() {
+        return 0;
+    }
 
-	public boolean hasBaseline() {
-		return false;
-	}
+    public boolean hasBaseline() {
+        return false;
+    }
 }

@@ -19,7 +19,7 @@
  */
 package org.xhtmlrenderer.swing;
 
-import java.awt.Point;
+import java.awt.*;
 
 import javax.swing.JComponent;
 
@@ -28,46 +28,51 @@ import org.xhtmlrenderer.layout.LayoutContext;
 
 public class SwingReplacedElement implements ReplacedElement {
     private JComponent _component;
-    
+    private Dimension intrinsicSize;
+
     public SwingReplacedElement(JComponent component) {
         _component = component;
     }
-    
+
     public JComponent getJComponent() {
         return _component;
     }
-    
+
+    public void setIntrinsicSize(Dimension intrinsicSize){
+        this.intrinsicSize = intrinsicSize;
+    }
+
     public int getIntrinsicHeight() {
-        return _component.getBounds().height;
+        return intrinsicSize == null ? _component.getSize().height : intrinsicSize.height;
     }
-    
+
     public int getIntrinsicWidth() {
-        return _component.getBounds().width;
+        return intrinsicSize == null ? _component.getSize().width : intrinsicSize.width;
     }
-    
+
     public void setLocation(int x, int y) {
         _component.setLocation(x, y);
     }
-    
+
     public Point getLocation() {
         return _component.getLocation();
     }
-    
+
     public void detach(LayoutContext c) {
         if (c.isInteractive()) {
-            c.getCanvas().remove(getJComponent());
+            ((RootPanel)c.getCanvas()).remove(getJComponent());
         }
     }
-    
+
     public boolean isRequiresInteractivePaint() {
         return false;
     }
 
-	public int getBaseline() {
-		return 0;
-	}
+    public int getBaseline() {
+        return 0;
+    }
 
-	public boolean hasBaseline() {
-		return false;
-	}
+    public boolean hasBaseline() {
+        return false;
+    }
 }

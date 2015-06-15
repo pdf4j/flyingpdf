@@ -19,18 +19,14 @@
  */
 package org.xhtmlrenderer.demo.browser;
 
-import org.xhtmlrenderer.resource.ImageResource;
 import org.xhtmlrenderer.resource.XMLResource;
-import org.xhtmlrenderer.swing.AWTFSImage;
-import org.xhtmlrenderer.swing.NaiveUserAgent;
+import org.xhtmlrenderer.swing.DelegatingUserAgent;
 import org.xhtmlrenderer.util.Uu;
 import org.xhtmlrenderer.util.XRLog;
 import org.xhtmlrenderer.util.GeneralUtil;
 import org.xml.sax.InputSource;
 
-import javax.imageio.ImageIO;
 import javax.xml.transform.sax.SAXSource;
-import java.awt.*;
 import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
@@ -43,29 +39,68 @@ import java.util.ArrayList;
  * {@link #getBack()}, {@link #getForward()} and {@link #hasForward()} methods to navigate within the history.
  * As a NaiveUserAgent, the PanelManager is also a DocumentListener, but must be added to the source of document
  * events (like a RootPanel subclass).
- *  
+ *
  */
-public class PanelManager extends NaiveUserAgent {
+public class PanelManager extends DelegatingUserAgent {
     private int index = -1;
     private ArrayList history = new ArrayList();
 
 
-	/**
-	 * {@inheritDoc}
-	 */
-	protected ImageResource createImageResource(String uri, Image img) {
-		if (img == null) {
-			return new DummyImageResource(uri);
-		} else {
-			return super.createImageResource(uri, img);
-		}
+    /**
+     * {@inheritdoc}.
+     */
+    public String resolveURI(String uri) {
+        final String burl = getBaseURL();
 
-	}
+        URL ref = null;
 
-	/**
-	 * {@inheritDoc}
-	 */
-	public XMLResource getXMLResource(String uri) {
+        if (uri == null) return burl;
+        if (uri.trim().equals("")) return burl; //jar URLs don't resolve this right
+
+        if (uri.startsWith("demo:")) {
+            DemoMarker marker = new DemoMarker();
+            String short_url = uri.substring(5);
+            if (!short_url.startsWith("/")) {
+                short_url = "/" + short_url;
+            }
+            ref = marker.getClass().getResource(short_url);
+            Uu.p("ref = " + ref);
+        } else if (uri.startsWith("demoNav:")) {
+            DemoMarker marker = new DemoMarker();
+            String short_url = uri.substring("demoNav:".length());
+            if (!short_url.startsWith("/")) {
+                short_url = "/" + short_url;
+            }
+            ref = marker.getClass().getResource(short_url);
+            Uu.p("Demo navigation URI, ref = " + ref);
+        } else if (uri.startsWith("javascript")) {
+            Uu.p("Javascript URI, ignoring: " + uri);
+        } else if (uri.startsWith("news")) {
+            Uu.p("News URI, ignoring: " + uri);
+        } else {
+            try {
+                URL base;
+                if (burl == null || burl.length() == 0) {
+                    base = new File(".").toURL();
+                } else {
+                    base = new URL(burl);
+                }
+                ref = new URL(base, uri);
+            } catch (MalformedURLException e) {
+                Uu.p("URI/URL is malformed: " + burl + " or " + uri);
+            }
+        }
+
+        if (ref == null)
+            return null;
+        else
+            return ref.toExternalForm();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public XMLResource getXMLResource(String uri) {
         uri = resolveURI(uri);
         if (uri != null && uri.startsWith("file:")) {
             File file = null;
@@ -123,14 +158,14 @@ public class PanelManager extends NaiveUserAgent {
         return xr;
     }
 
-	/**
-	 * Used internally when a document can't be loaded--returns XHTML as an XMLResource indicating that fact.
-	 *
-	 * @param uri The URI which could not be loaded.
-	 *
-	 * @return An XMLResource containing XML which about the failure.
-	 */
-	private XMLResource getNotFoundDocument(String uri) {
+    /**
+     * Used internally when a document can't be loaded--returns XHTML as an XMLResource indicating that fact.
+     *
+     * @param uri The URI which could not be loaded.
+     *
+     * @return An XMLResource containing XML which about the failure.
+     */
+    private XMLResource getNotFoundDocument(String uri) {
         XMLResource xr;
 
         // URI may contain & symbols which can "break" the XHTML we're creating
@@ -141,28 +176,28 @@ public class PanelManager extends NaiveUserAgent {
         return xr;
     }
 
-	/**
-	 * Returns true if the link has been visited by the user in this session. Visit tracking is not persisted.
-	 */
-	public boolean isVisited(String uri) {
+    /**
+     * Returns true if the link has been visited by the user in this session. Visit tracking is not persisted.
+     */
+    public boolean isVisited(String uri) {
         if (uri == null) return false;
         uri = resolveURI(uri);
         return history.contains(uri);
     }
 
-	/**
-	 * {@inheritDoc}
-	 */
-	public void setBaseURL (String url) {
-		String burl = super.getBaseURL();
-		if(burl !=null &&  burl.startsWith("error:")) burl = null;
-        
+    /**
+     * {@inheritDoc}
+     */
+    public void setBaseURL (String url) {
+        String burl = super.getBaseURL();
+        if(burl !=null &&  burl.startsWith("error:")) burl = null;
+
         burl = resolveURI(url);
         if (burl == null) burl = "error:FileNotFound";
 
-		super.setBaseURL(burl);
+        super.setBaseURL(burl);
 
-		// setBaseURL is called by view when document is loaded
+        // setBaseURL is called by view when document is loaded
         if (index >= 0) {
             String historic = (String) history.get(index);
             if (historic.equals(burl)) return; //moved in history
@@ -172,80 +207,30 @@ public class PanelManager extends NaiveUserAgent {
         history.add(index, burl);
     }
 
-	/**
-	 * {@inheritdoc}.
-	 */
-	public String resolveURI(String uri) {
-		final String burl = getBaseURL();
 
-		URL ref = null;
-
-		if (uri == null) return burl;
-        if (uri.trim().equals("")) return burl; //jar URLs don't resolve this right
-
-		if (uri.startsWith("demo:")) {
-            DemoMarker marker = new DemoMarker();
-            String short_url = uri.substring(5);
-            if (!short_url.startsWith("/")) {
-                short_url = "/" + short_url;
-            }
-            ref = marker.getClass().getResource(short_url);
-            Uu.p("ref = " + ref);
-        } else if (uri.startsWith("demoNav:")) {
-            DemoMarker marker = new DemoMarker();
-            String short_url = uri.substring("demoNav:".length());
-            if (!short_url.startsWith("/")) {
-                short_url = "/" + short_url;
-            }
-            ref = marker.getClass().getResource(short_url);
-            Uu.p("Demo navigation URI, ref = " + ref);
-        } else if (uri.startsWith("javascript")) {
-            Uu.p("Javascript URI, ignoring: " + uri);
-        } else if (uri.startsWith("news")) {
-            Uu.p("News URI, ignoring: " + uri);
-        } else {
-            try {
-                URL base;
-                if (burl == null || burl.length() == 0) {
-                    base = new File(".").toURL();
-                } else {
-                    base = new URL(burl);
-                }
-                ref = new URL(base, uri);
-            } catch (MalformedURLException e) {
-                Uu.p("URI/URL is malformed: " + burl + " or " + uri);
-            }
-        }
-
-        if (ref == null)
-            return null;
-        else
-            return ref.toExternalForm();
-    }
-
-	/**
-	 * Returns the "next" URI in the history of visiting URIs. Advances the URI tracking (as if browser "forward" was
-	 * used).
-	 */
-	public String getForward() {
+    /**
+     * Returns the "next" URI in the history of visiting URIs. Advances the URI tracking (as if browser "forward" was
+     * used).
+     */
+    public String getForward() {
         index++;
         return (String) history.get(index);
     }
 
-	/**
-	 * Returns the "previous" URI in the history of visiting URIs. Moves the URI tracking back (as if browser "back" was
-	 * used).
-	 */
-	public String getBack() {
+    /**
+     * Returns the "previous" URI in the history of visiting URIs. Moves the URI tracking back (as if browser "back" was
+     * used).
+     */
+    public String getBack() {
         index--;
         return (String) history.get(index);
     }
 
-	/**
-	 * Returns true if there are visited URIs in history "after" the pointer the the current URI. This would be the case
-	 * if multiple URIs were visited and the getBack() had been called at least once.
-	 */
-	public boolean hasForward() {
+    /**
+     * Returns true if there are visited URIs in history "after" the pointer the the current URI. This would be the case
+     * if multiple URIs were visited and the getBack() had been called at least once.
+     */
+    public boolean hasForward() {
         if (index + 1 < history.size() && index >= 0) {
             return true;
         } else {
@@ -253,10 +238,10 @@ public class PanelManager extends NaiveUserAgent {
         }
     }
 
-	/**
-	 * Returns true if there are visited URIs in history "before" the pointer the the current URI. This would be the case
-	 * if multiple URIs were visited and the current URI pointer was not at the begininnig of the visited URI list. 
-	 */
+    /**
+     * Returns true if there are visited URIs in history "before" the pointer the the current URI. This would be the case
+     * if multiple URIs were visited and the current URI pointer was not at the begininnig of the visited URI list.
+     */
     public boolean hasBack() {
         if (index > 0) {
             return true;
@@ -264,17 +249,4 @@ public class PanelManager extends NaiveUserAgent {
             return false;
         }
     }
-
-	/**
-	 * Simple wrapper class for image URIs that can't be loaded.
-	 */
-	private class DummyImageResource extends ImageResource {
-        private final String uri;
-
-        public DummyImageResource(String uri) {
-            super(null);
-            this.uri = uri;
-        }
-    }
-
 }

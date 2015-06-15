@@ -23,6 +23,7 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Insets;
 import java.awt.LayoutManager;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -38,6 +39,7 @@ import java.util.List;
 import java.util.logging.Level;
 
 import javax.swing.JOptionPane;
+
 import org.w3c.dom.Document;
 import org.xhtmlrenderer.css.style.CalculatedStyle;
 import org.xhtmlrenderer.css.style.derived.RectPropertySet;
@@ -50,11 +52,13 @@ import org.xhtmlrenderer.render.Box;
 import org.xhtmlrenderer.render.PageBox;
 import org.xhtmlrenderer.render.RenderingContext;
 import org.xhtmlrenderer.resource.XMLResource;
+import org.xhtmlrenderer.simple.NoNamespaceHandler;
 import org.xhtmlrenderer.simple.extend.FormSubmissionListener;
 import org.xhtmlrenderer.util.Configuration;
 import org.xhtmlrenderer.util.Uu;
 import org.xhtmlrenderer.util.XRLog;
 import org.xml.sax.InputSource;
+
 
 
 
@@ -70,10 +74,7 @@ public abstract class BasicPanel extends RootPanel implements FormSubmissionList
 
     private boolean explicitlyOpaque;
 
-    // The XMLResource proxing the current document in the BasicPanel
-    private XMLResource xmlResource;
-    
-    private MouseTracker mouseTracker;
+    private final MouseTracker mouseTracker;
     private boolean centeredPagedView;
     protected FormSubmissionListener formSubmissionListener;
 
@@ -92,7 +93,7 @@ public abstract class BasicPanel extends RootPanel implements FormSubmissionList
                 JOptionPane.showMessageDialog(
                         null,
                         "Form submit called; check console to see the query string" +
-                        " that would have been submitted.",
+                                " that would have been submitted.",
                         "Form Submission",
                         JOptionPane.INFORMATION_MESSAGE
                 );
@@ -130,20 +131,20 @@ public abstract class BasicPanel extends RootPanel implements FormSubmissionList
             paintDefaultBackground(g);
             return;
         }
-        
+
         // if this is the first time painting this document, then calc layout
         Layer root = getRootLayer();
-        if (root == null || isPendingResize()) {
-            doDocumentLayout(getGraphics());
+        if (root == null || isNeedRelayout()) {
+            doDocumentLayout(g.create());
             root = getRootLayer();
         }
-        setPendingResize(false);
+        setNeedRelayout(false);
         if (root == null) {
             //Uu.p("dispatching an initial resize event");
             //queue.dispatchLayoutEvent(new ReflowEvent(ReflowEvent.CANVAS_RESIZED, this.getSize()));
             XRLog.render(Level.FINE, "skipping the actual painting");
         } else {
-            RenderingContext c = newRenderingContext((Graphics2D) g);
+            RenderingContext c = newRenderingContext((Graphics2D) g.create());
             long start = System.currentTimeMillis();
             doRender(c, root);
             long end = System.currentTimeMillis();
@@ -155,9 +156,15 @@ public abstract class BasicPanel extends RootPanel implements FormSubmissionList
         try {
             // paint the normal swing background first
             // but only if we aren't printing.
-            Graphics g = ((Java2DOutputDevice)c.getOutputDevice()).getGraphics();            
+            Graphics g = ((Java2DOutputDevice)c.getOutputDevice()).getGraphics();
+
             paintDefaultBackground(g);
-    
+
+            if (enclosingScrollPane == null) {
+                Insets insets = getInsets();
+                g.translate(insets.left, insets.top);
+            }
+
             long start = System.currentTimeMillis();
             if (!c.isPrint()) {
                 root.paint(c);
@@ -180,7 +187,7 @@ public abstract class BasicPanel extends RootPanel implements FormSubmissionList
                 if (t instanceof RuntimeException) {
                     throw (RuntimeException)t;
                 }
-                
+
                 // "Shouldn't" happen
                 XRLog.exception(t.getMessage(), t);
             }
@@ -193,7 +200,7 @@ public abstract class BasicPanel extends RootPanel implements FormSubmissionList
             g.fillRect(0, 0, getWidth(), getHeight());
         }
     }
-    
+
     private void paintPagedView(RenderingContext c, Layer root) {
         if (root.getLastPage() == null) {
             return;
@@ -220,13 +227,13 @@ public abstract class BasicPanel extends RootPanel implements FormSubmissionList
             c.setPage(i, page);
 
             g.setClip(working);
-            
+
             Rectangle overall = page.getScreenPaintingBounds(c, pagePaintingClearanceWidth);
             overall.x -= 1;
             overall.y -= 1;
             overall.width += 1;
             overall.height += 1;
-            
+
             Rectangle bounds = new Rectangle(overall);
             bounds.width += 1;
             bounds.height += 1;
@@ -234,30 +241,30 @@ public abstract class BasicPanel extends RootPanel implements FormSubmissionList
                 page.paintBackground(c, pagePaintingClearanceWidth, Layer.PAGED_MODE_SCREEN);
                 page.paintMarginAreas(c, pagePaintingClearanceWidth, Layer.PAGED_MODE_SCREEN);
                 page.paintBorder(c, pagePaintingClearanceWidth, Layer.PAGED_MODE_SCREEN);
-                
+
                 Color old = g.getColor();
-                
+
                 g.setColor(Color.BLACK);
                 g.drawRect(overall.x, overall.y, overall.width, overall.height);
                 g.setColor(old);
-                
+
                 Rectangle content = page.getPagedViewClippingBounds(c, pagePaintingClearanceWidth);
                 g.clip(content);
-                
+
                 int left = pagePaintingClearanceWidth +
-                    page.getMarginBorderPadding(c, CalculatedStyle.LEFT);
-                int top = page.getPaintingTop() 
-                    + page.getMarginBorderPadding(c, CalculatedStyle.TOP)
-                    - page.getTop();
-                
+                        page.getMarginBorderPadding(c, CalculatedStyle.LEFT);
+                int top = page.getPaintingTop()
+                        + page.getMarginBorderPadding(c, CalculatedStyle.TOP)
+                        - page.getTop();
+
                 g.translate(left, top);
                 root.paint(c);
                 g.translate(-left, -top);
-                
+
                 g.setClip(working);
-            } 
+            }
         }
-        
+
         g.setClip(working);
     }
 
@@ -271,7 +278,7 @@ public abstract class BasicPanel extends RootPanel implements FormSubmissionList
         if (root == null) {
             throw new RuntimeException("Document needs layout");
         }
-        
+
         if (pageNo < 0 || pageNo >= root.getPages().size()) {
             throw new IllegalArgumentException("Page " + pageNo + " is not between 0 " +
                     "and " + root.getPages().size());
@@ -282,28 +289,28 @@ public abstract class BasicPanel extends RootPanel implements FormSubmissionList
         PageBox page = (PageBox)root.getPages().get(pageNo);
         c.setPageCount(root.getPages().size());
         c.setPage(pageNo, page);
-        
+
         page.paintBackground(c, 0, Layer.PAGED_MODE_PRINT);
         page.paintMarginAreas(c, 0, Layer.PAGED_MODE_PRINT);
         page.paintBorder(c, 0, Layer.PAGED_MODE_PRINT);
-        
+
         Shape working = g.getClip();
-        
+
         Rectangle content = page.getPrintClippingBounds(c);
         g.clip(content);
-        
-        int top = -page.getPaintingTop() + 
-            page.getMarginBorderPadding(c, CalculatedStyle.TOP);
-        
+
+        int top = -page.getPaintingTop() +
+                page.getMarginBorderPadding(c, CalculatedStyle.TOP);
+
         int left = page.getMarginBorderPadding(c, CalculatedStyle.LEFT);
-        
+
         g.translate(left, top);
         root.paint(c);
         g.translate(-left, -top);
-        
+
         g.setClip(working);
     }
-    
+
     public void assignPagePrintPositions(Graphics2D g) {
         RenderingContext c = newRenderingContext(g);
         getRootLayer().assignPagePaintingPositions(c, Layer.PAGED_MODE_PRINT);
@@ -350,7 +357,8 @@ public abstract class BasicPanel extends RootPanel implements FormSubmissionList
     } */
     }
 
-    /* =========== set document utility methods =============== */
+    /*
+=========== set document utility methods =============== */
 
     public void setDocument(InputStream stream, String url, NamespaceHandler nsh) {
         Document dom = XMLResource.load(stream).getDocument();
@@ -448,7 +456,7 @@ public abstract class BasicPanel extends RootPanel implements FormSubmissionList
         }
         return base;
     }
-    
+
     public Document getDocument() {
         return doc;
     }
@@ -465,11 +473,12 @@ public abstract class BasicPanel extends RootPanel implements FormSubmissionList
     }
 
     protected Document loadDocument(final String uri) {
-        xmlResource = sharedContext.getUac().getXMLResource(uri);
-        return this.xmlResource.getDocument();
+        XMLResource xmlResource = sharedContext.getUac().getXMLResource(uri);
+        return xmlResource.getDocument();
     }
 
-    /* ====== hover and active utility methods ========= */
+    /* ====== hover and active utility methods
+========= */
 
     public boolean isHover(org.w3c.dom.Element e) {
         if (e == hovered_element) {
@@ -577,19 +586,19 @@ public abstract class BasicPanel extends RootPanel implements FormSubmissionList
     public void setInteractive(boolean interactive) {
         this.getSharedContext().setInteractive(interactive);
     }
-    
+
     public void addMouseTrackingListener(FSMouseListener l) {
         mouseTracker.addListener(l);
     }
-    
+
     public void removeMouseTrackingListener(FSMouseListener l) {
         mouseTracker.removeListener(l);
     }
-    
+
     public List getMouseTrackingListeners() {
         return mouseTracker.getListeners();
     }
-    
+
     protected void resetMouseTracker() {
         mouseTracker.reset();
     }

@@ -23,12 +23,14 @@ import javax.swing.JComponent;
 import javax.swing.JPasswordField;
 
 import org.w3c.dom.Element;
+import org.xhtmlrenderer.layout.LayoutContext;
+import org.xhtmlrenderer.render.BlockBox;
 import org.xhtmlrenderer.simple.extend.XhtmlForm;
 import org.xhtmlrenderer.util.GeneralUtil;
 
 class PasswordField extends InputField {
-    public PasswordField(Element e, XhtmlForm form) {
-        super(e, form);
+    public PasswordField(Element e, XhtmlForm form, LayoutContext context, BlockBox box) {
+        super(e, form, context, box);
     }
 
     public JComponent create() {
@@ -54,7 +56,7 @@ class PasswordField extends InputField {
         }
 
         if (hasAttribute("readonly") &&
-                getAttribute("readonly").equals("readonly")) {
+                getAttribute("readonly").equalsIgnoreCase("readonly")) {
             password.setEditable(false);
         }
 

@@ -21,10 +21,15 @@ package org.xhtmlrenderer.util;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.logging.Level;
+import javax.imageio.ImageIO;
+import javax.xml.bind.DatatypeConverter;
 
 /**
  * Static utility methods for working with images. Meant to suggest "best practices" for the most straightforward
@@ -47,7 +52,7 @@ public class ImageUtil {
 	/**
 	 * Sets the background of the image to the specified color
 	 *
-	 * @param image   the image
+	 * @param image the image
 	 * @param bgColor the color
 	 */
 	public static void clearImage(BufferedImage image, Color bgColor) {
@@ -64,6 +69,24 @@ public class ImageUtil {
 	 */
 	public static void clearImage(BufferedImage image) {
 		clearImage(image, Color.WHITE);
+	}
+
+	public static BufferedImage makeCompatible(BufferedImage bimg) {
+		BufferedImage cimg = null;
+		if (GraphicsEnvironment.isHeadless()) {
+			cimg = createCompatibleBufferedImage(bimg.getWidth(), bimg.getHeight(), bimg.getTransparency());
+		} else {
+			GraphicsConfiguration gc = getGraphicsConfiguration();
+			if (bimg.getColorModel().equals(gc.getColorModel())) {
+				return bimg;
+			}
+			cimg = gc.createCompatibleImage(bimg.getWidth(), bimg.getHeight(), bimg.getTransparency());
+		}
+
+		Graphics cg = cimg.getGraphics();
+		cg.drawImage(bimg, 0, 0, null);
+		cg.dispose();
+		return cimg;
 	}
 
 	/**
@@ -90,17 +113,23 @@ public class ImageUtil {
 		if (ge.isHeadlessInstance()) {
 			bimage = new BufferedImage(width, height, biType);
 		} else {
-			GraphicsDevice gs = ge.getDefaultScreenDevice();
-			GraphicsConfiguration gc = gs.getDefaultConfiguration();
+			GraphicsConfiguration gc = getGraphicsConfiguration();
 
-            // TODO: check type using image type - can be sniffed; see Filthy Rich Clients
-            int type = (biType == BufferedImage.TYPE_INT_ARGB || biType == BufferedImage.TYPE_INT_ARGB_PRE ?
+			// TODO: check type using image type - can be sniffed; see Filthy Rich Clients
+			int type = (biType == BufferedImage.TYPE_INT_ARGB || biType == BufferedImage.TYPE_INT_ARGB_PRE ?
 					Transparency.TRANSLUCENT : Transparency.OPAQUE);
 
 			bimage = gc.createCompatibleImage(width, height, type);
 		}
 
 		return bimage;
+	}
+
+	private static GraphicsConfiguration getGraphicsConfiguration() {
+		GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+		GraphicsDevice gs = ge.getDefaultScreenDevice();
+		GraphicsConfiguration gc = gs.getDefaultConfiguration();
+		return gc;
 	}
 
 	/**
@@ -116,7 +145,6 @@ public class ImageUtil {
 	public static BufferedImage createCompatibleBufferedImage(int width, int height) {
 		return createCompatibleBufferedImage(width, height, Transparency.BITMASK);
 	}
-
 
 	/**
 	 * Scales an image to the requested width and height, assuming these are both >= 1; size given in pixels.
@@ -138,15 +166,18 @@ public class ImageUtil {
 		int w = orgImage.getWidth(null);
 		int h = orgImage.getHeight(null);
 
-		if (opt.sizeMatches(w, h)) return orgImage;
+		if (opt.sizeMatches(w, h)) {
+			return orgImage;
+		}
 
 		w = (opt.getTargetWidth() <= 0 ? w : opt.getTargetWidth());
 		h = (opt.getTargetHeight() <= 0 ? h : opt.getTargetHeight());
 
 		Scaler scaler = (ImageUtil.Scaler) qual.get(opt.getDownscalingHint());
-		BufferedImage tmp = scaler.getScaledInstance(orgImage, opt);
+		opt.setTargetWidth(w);
+		opt.setTargetHeight(h);
 
-		return tmp;
+		return scaler.getScaledInstance(orgImage, opt);
 	}
 
 	/**
@@ -226,29 +257,74 @@ public class ImageUtil {
 		return bimg;
 	}
 
-    public static Image createTransparentImage(int width, int height) {
-        BufferedImage bi = createCompatibleBufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2d = bi.createGraphics();
+	public static BufferedImage createTransparentImage(int width, int height) {
+		BufferedImage bi = createCompatibleBufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g2d = bi.createGraphics();
 
-        // Make all filled pixels transparent
-        Color transparent = new Color(0, 0, 0, 0);
-        g2d.setColor(transparent);
-        g2d.setComposite(AlphaComposite.Src);
-        g2d.fillRect(0, 0, width, height);
-        g2d.dispose();
-        return bi;
-    }
+		// Make all filled pixels transparent
+		Color transparent = new Color(0, 0, 0, 0);
+		g2d.setColor(transparent);
+		g2d.setComposite(AlphaComposite.Src);
+		g2d.fillRect(0, 0, width, height);
+		g2d.dispose();
+		return bi;
+	}
 
-    interface Scaler {
+	/**
+	 * Detect if an URI represents an embedded base 64 image.
+	 *
+	 * @param uri URI of the image
+	 * @return A boolean
+	 */
+	public static boolean isEmbeddedBase64Image(String uri) {
+		return (uri != null && uri.startsWith("data:image/"));
+	}
+
+	/**
+	 * Get the binary content of an embedded base 64 image.
+	 *
+	 * @param imageDataUri URI of the embedded image
+	 * @return The binary content
+	 */
+	public static byte[] getEmbeddedBase64Image(String imageDataUri) {
+		int b64Index = imageDataUri.indexOf("base64,");
+		if (b64Index != -1) {
+			String b64encoded = imageDataUri.substring(b64Index + "base64,".length());
+			return DatatypeConverter.parseBase64Binary(b64encoded);
+		} else {
+			XRLog.load(Level.SEVERE, "Embedded XHTML images must be encoded in base 64.");
+		}
+		return null;
+	}
+
+	/**
+	 * Get the BufferedImage of an embedded base 64 image.
+	 *
+	 * @param imageDataUri URI of the embedded image
+	 * @return The BufferedImage
+	 */
+	public static BufferedImage loadEmbeddedBase64Image(String imageDataUri) {
+		try {
+			byte[] buffer = getEmbeddedBase64Image(imageDataUri);
+			if (buffer != null) {
+				return ImageIO.read(new ByteArrayInputStream(buffer));
+			}
+		} catch (IOException ex) {
+			XRLog.exception("Can't read XHTML embedded image", ex);
+		}
+		return null;
+	}
+
+	interface Scaler {
 		/**
 		 * Convenience method that returns a scaled instance of the
 		 * provided {@code BufferedImage}, taken from article on java.net by Chris Campbell
 		 * http://today.java.net/pub/a/today/2007/04/03/perils-of-image-getscaledinstance.html. Expects the image
 		 * to be fully loaded (e.g. no need to wait for loading on requesting height or width.
 		 *
-		 * @param img		   the original image to be scaled
-		 * @param imageType	 type of image from {@link java.awt.image.BufferedImage} (values starting with TYPE)
-		 * @param hint		  one of the rendering hints that corresponds to
+		 * @param img		the original image to be scaled
+		 * @param imageType	type of image from {@link java.awt.image.BufferedImage} (values starting with TYPE)
+		 * @param hint		one of the rendering hints that corresponds to
 		 *                      {@code RenderingHints.KEY_INTERPOLATION} (e.g.
 		 *                      {@code RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR},
 		 *                      {@code RenderingHints.VALUE_INTERPOLATION_BILINEAR},

@@ -1,6 +1,6 @@
 /*
  * {{{ header & license
- * Copyright (c) 2004, 2005 Torbjörn Gannholm
+ * Copyright (c) 2004, 2005 Torbjï¿½rn Gannholm
  * Copyright (c) 2007 Sean Bright
  *
  * This program is free software; you can redistribute it and/or
@@ -34,6 +34,8 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.Text;
 import org.xhtmlrenderer.extend.UserAgentCallback;
+import org.xhtmlrenderer.layout.LayoutContext;
+import org.xhtmlrenderer.render.BlockBox;
 import org.xhtmlrenderer.simple.extend.form.FormField;
 import org.xhtmlrenderer.simple.extend.form.FormFieldFactory;
 import org.xhtmlrenderer.util.XRLog;
@@ -41,14 +43,11 @@ import org.xhtmlrenderer.util.XRLog;
 /**
  * Represents a form object
  *
- * @author Torbjörn Gannholm
+ * @author Torbjoern Gannholm
  * @author Sean Bright
  */
 public class XhtmlForm {
     private static final String FS_DEFAULT_GROUP = "__fs_default_group_";
-    public static JComponent HIDDEN_FIELD = new JComponent() {
-        private static final long serialVersionUID = 1L;
-    };
 
     private static int _defaultGroupCount = 1;
 
@@ -73,14 +72,14 @@ public class XhtmlForm {
     public UserAgentCallback getUserAgentCallback() {
         return _userAgentCallback;
     }
-    
+
     public void addButtonToGroup(String groupName, AbstractButton button) {
         if (groupName == null) {
             groupName = createNewDefaultGroupName();
         }
 
         ButtonGroupWrapper group = (ButtonGroupWrapper) _buttonGroups.get(groupName);
-        
+
         if (group == null) {
             group = new ButtonGroupWrapper();
 
@@ -89,22 +88,22 @@ public class XhtmlForm {
 
         group.add(button);
     }
-    
+
     private static String createNewDefaultGroupName() {
         return FS_DEFAULT_GROUP + ++_defaultGroupCount;
     }
 
     private static boolean isFormField(Element e) {
         String nodeName = e.getNodeName();
-        
+
         if (nodeName.equals("input") || nodeName.equals("select") || nodeName.equals("textarea")) {
             return true;
         }
-        
+
         return false;
     }
 
-    public JComponent addComponent(Element e) {
+    public FormField addComponent(Element e, LayoutContext context, BlockBox box) {
         FormField field = null;
 
         if (_componentCache.containsKey(e)) {
@@ -113,21 +112,21 @@ public class XhtmlForm {
             if (!isFormField(e)) {
                 return null;
             }
-            
-            field = FormFieldFactory.create(e, this);
-    
+
+            field = FormFieldFactory.create(this, context, box);
+
             if (field == null) {
                 XRLog.layout("Unknown field type: " + e.getNodeName());
 
                 return null;
             }
-            
+
             _componentCache.put(e, field);
         }
 
-        return field.getComponent();
+        return field;
     }
-    
+
     public void reset() {
         Iterator buttonGroups = _buttonGroups.values().iterator();
         while (buttonGroups.hasNext()) {
@@ -156,21 +155,21 @@ public class XhtmlForm {
             Map.Entry entry = (Map.Entry) fields.next();
 
             FormField field = (FormField) entry.getValue();
-            
+
             if (field.includeInSubmission(source)) {
                 String [] dataStrings = field.getFormDataStrings();
-                
+
                 for (int i = 0; i < dataStrings.length; i++) {
                     if (!first) {
                         data.append('&');
                     }
-    
+
                     data.append(dataStrings[i]);
                     first=false;
                 }
             }
         }
-        
+
         if(_formSubmissionListener !=null) _formSubmissionListener.submit(data.toString());
     }
 
@@ -188,11 +187,11 @@ public class XhtmlForm {
         }
         return result.toString().trim();
     }
-    
+
     private static class ButtonGroupWrapper {
         private ButtonGroup _group;
         private AbstractButton _dummy;
-        
+
         public ButtonGroupWrapper() {
             _group = new ButtonGroup();
             _dummy = new JRadioButton();
@@ -211,7 +210,7 @@ public class XhtmlForm {
             // could be wired to select the invisible radio button.
             _group.add(_dummy);
         }
-        
+
         public void add(AbstractButton b) {
             _group.add(b);
         }

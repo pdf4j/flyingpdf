@@ -24,11 +24,13 @@ import javax.swing.JRadioButton;
 import javax.swing.JToggleButton;
 
 import org.w3c.dom.Element;
+import org.xhtmlrenderer.layout.LayoutContext;
+import org.xhtmlrenderer.render.BlockBox;
 import org.xhtmlrenderer.simple.extend.XhtmlForm;
 
 class RadioButtonField extends InputField {
-    public RadioButtonField(Element e, XhtmlForm form) {
-        super(e, form);
+    public RadioButtonField(Element e, XhtmlForm form, LayoutContext context, BlockBox box) {
+        super(e, form, context, box);
     }
 
     public JComponent create() {
@@ -51,7 +53,7 @@ class RadioButtonField extends InputField {
     
     protected FormFieldState loadOriginalState() {
         return FormFieldState.fromBoolean(
-                getAttribute("checked").equals("checked"));
+                getAttribute("checked").equalsIgnoreCase("checked"));
     }
 
     protected void applyOriginalState() {

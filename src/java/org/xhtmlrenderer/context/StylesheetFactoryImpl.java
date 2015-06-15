@@ -1,6 +1,6 @@
 /*
  * StylesheetFactoryImpl.java
- * Copyright (c) 2004, 2005 Torbj�rn Gannholm
+ * Copyright (c) 2004, 2005 Torbjoern Gannholm
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public License
@@ -35,13 +35,14 @@ import org.xhtmlrenderer.css.sheet.StylesheetInfo;
 import org.xhtmlrenderer.extend.UserAgentCallback;
 import org.xhtmlrenderer.resource.CSSResource;
 import org.xhtmlrenderer.util.XRLog;
+import org.xml.sax.InputSource;
 
 /**
  * A Factory class for Cascading Style Sheets. Sheets are parsed using a single
  * parser instance for all sheets. Sheets are cached by URI using a LRU test,
  * but timestamp of file is not checked.
  *
- * @author Torbj�rn Gannholm
+ * @author Torbjoern Gannholm
  */
 public class StylesheetFactoryImpl implements StylesheetFactory {
     /**
@@ -88,9 +89,13 @@ public class StylesheetFactoryImpl implements StylesheetFactory {
      */
     private Stylesheet parse(StylesheetInfo info) {
         CSSResource cr = _userAgentCallback.getCSSResource(info.getUri());
+        if (cr==null) return null;
         // Whether by accident or design, InputStream will never be null
         // since the null resource stream is wrapped in a BufferedInputStream
-        InputStream is = cr.getResourceInputSource().getByteStream();
+        InputSource inputSource=cr.getResourceInputSource();
+        if (inputSource==null) return null;
+        InputStream is = inputSource.getByteStream();
+        if (is==null) return null;
         try {
             return parse(new InputStreamReader(is, "UTF-8"), info);
         } catch (UnsupportedEncodingException e) {
@@ -153,7 +158,7 @@ public class StylesheetFactoryImpl implements StylesheetFactory {
     public synchronized Object removeCachedStylesheet(Object key) {
         return _cache.remove(key);
     }
-    
+
     public synchronized void flushCachedStylesheets() {
         _cache.clear();
     }
@@ -180,7 +185,7 @@ public class StylesheetFactoryImpl implements StylesheetFactory {
     public void setUserAgentCallback(UserAgentCallback userAgent) {
         _userAgentCallback = userAgent;
     }
-    
+
     public void setSupportCMYKColors(boolean b) {
         _cssParser.setSupportCMYKColors(b);
     }

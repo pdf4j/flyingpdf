@@ -11,7 +11,7 @@ import org.xhtmlrenderer.css.style.CssContext;
 public class RectPropertySet {
     //                                                                  HACK
     public static final RectPropertySet ALL_ZEROS = new RectPropertySet(CSSName.MARGIN_SHORTHAND, 0, 0, 0, 0);
-    
+
     protected float _top;
     protected float _right;
     protected float _bottom;
@@ -38,7 +38,7 @@ public class RectPropertySet {
     public static RectPropertySet newInstance(
             CalculatedStyle style,
             CSSName shortHandProperty,
-            CSSName[] sideProperties,
+            CSSName.CSSSideProperties sideProperties,
             float cbWidth,
             CssContext ctx
     ) {
@@ -46,10 +46,10 @@ public class RectPropertySet {
         RectPropertySet rect =
                 new RectPropertySet(
                         shortHandProperty,
-                        ! style.isLengthOrNumber(sideProperties[0]) ? 0 : style.getFloatPropertyProportionalHeight(sideProperties[0], cbWidth, ctx),
-                        ! style.isLengthOrNumber(sideProperties[1]) ? 0 : style.getFloatPropertyProportionalWidth(sideProperties[1], cbWidth, ctx),
-                        ! style.isLengthOrNumber(sideProperties[2]) ? 0 : style.getFloatPropertyProportionalHeight(sideProperties[2], cbWidth, ctx),
-                        ! style.isLengthOrNumber(sideProperties[3]) ? 0 : style.getFloatPropertyProportionalWidth(sideProperties[3], cbWidth, ctx)
+                        ! style.isLengthOrNumber(sideProperties.top) ? 0 : style.getFloatPropertyProportionalHeight(sideProperties.top, cbWidth, ctx),
+                        ! style.isLengthOrNumber(sideProperties.right) ? 0 : style.getFloatPropertyProportionalWidth(sideProperties.right, cbWidth, ctx),
+                        ! style.isLengthOrNumber(sideProperties.bottom) ? 0 : style.getFloatPropertyProportionalHeight(sideProperties.bottom, cbWidth, ctx),
+                        ! style.isLengthOrNumber(sideProperties.left) ? 0 : style.getFloatPropertyProportionalWidth(sideProperties.left, cbWidth, ctx)
                 );
         return rect;
     }
@@ -110,15 +110,15 @@ public class RectPropertySet {
         newRect._left = _left;
         return newRect;
     }
-    
+
     public boolean isAllZeros() {
         return _top == 0.0f && _right == 0.0f && _bottom == 0.0f && _left == 0.0f;
     }
-    
+
     public boolean hasNegativeValues() {
         return _top < 0 || _right < 0 || _bottom < 0 || _left < 0;
     }
-    
+
     public void resetNegativeValues() {
         if (top() < 0) {
             setTop(0);

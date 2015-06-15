@@ -56,7 +56,7 @@ import java.net.MalformedURLException;
  * <p>The order in which these will be read is: default properties (bundled with
  * the core, in the jar; override configuration properties; properties file in
  * user.home; and system properties.</p>
- * <p>You can override as many properties as you like. </p> 
+ * <p>You can override as many properties as you like. </p>
  * <p> Note that overrides are driven by the property names in the default
  * configuration file. Specifying a property name not in that file will have no
  * effect--the property will not be loaded or available for lookup.
@@ -64,7 +64,7 @@ import java.net.MalformedURLException;
  * LogStartupConfig.</p>
  * <p>
  * There are convenience converstion method for all the primitive types, in
- * methods like {@link #valueAsInt()}. A default must always be provided for these
+ * methods like {@link #valueAsInt(String, int)}. A default must always be provided for these
  * methods. The default is returned if the value is not found, or if the
  * conversion from String fails. If the value is not present, or the conversion
  * fails, a warning message is written to the log.</p>
@@ -118,7 +118,7 @@ public class Configuration {
                 // read logging level from System properties
                 // here we are trying to see if user wants to see logging about
                 // what configuration was loaded, e.g. debugging for config itself
-                String val = null;
+                String val;
                 try {
                     val = System.getProperty("show-config");
                 } catch (SecurityException ex) {
@@ -307,11 +307,11 @@ public class Configuration {
             } else {
                 InputStream in = null;
                 try {
-					URL url = new URL(uri);
-					in = new BufferedInputStream(url.openStream());
-					info("Found config override URI " + uri);
-					temp.load(in);
-				} catch (MalformedURLException e) {
+                    URL url = new URL(uri);
+                    in = new BufferedInputStream(url.openStream());
+                    info("Found config override URI " + uri);
+                    temp.load(in);
+                } catch (MalformedURLException e) {
                     warning("URI for override properties is malformed, skipping: " + uri);
                     return;
                 } catch (IOException e) {
@@ -377,8 +377,7 @@ public class Configuration {
 
     private String getUserHomeOverrideFileName() {
         try {
-            String overrideName = System.getProperty("user.home") + File.separator + ".flyingsaucer" + File.separator + "local.xhtmlrenderer.conf";
-            return overrideName;
+            return System.getProperty("user.home") + File.separator + ".flyingsaucer" + File.separator + "local.xhtmlrenderer.conf";
         } catch (SecurityException e) {
             // can happen in a sandbox
             return null;
@@ -416,17 +415,21 @@ public class Configuration {
         fine("Configuration: " + cnt + " properties overridden from System properties.");
 
         // add any additional properties we don't already know about (e.g. used for extended logging properties)
-        final Properties sysProps = System.getProperties();
-        final Enumeration keys = sysProps.keys();
-        cnt = 0;
-        while (keys.hasMoreElements()) {
-            String key = (String) keys.nextElement();
-            if (key.startsWith("xr.") && !this.properties.containsKey(key)) {
-                final Object val = sysProps.get(key);
-                this.properties.put(key, val);
-                finer("  (+) " + key);
-                cnt++;
+        try {
+            final Properties sysProps = System.getProperties();
+            final Enumeration keys = sysProps.keys();
+            cnt = 0;
+            while (keys.hasMoreElements()) {
+                String key = (String) keys.nextElement();
+                if (key.startsWith("xr.") && !this.properties.containsKey(key)) {
+                    final Object val = sysProps.get(key);
+                    this.properties.put(key, val);
+                    finer("  (+) " + key);
+                    cnt++;
+                }
             }
+        } catch (SecurityException e) {
+            // skip, this will happen in webstart or sandbox
         }
         fine("Configuration: " + cnt + " FS properties added from System properties.");
     }
@@ -465,15 +468,11 @@ public class Configuration {
         return val;
     }
 
-	public static boolean hasValue(String key) {
+    public static boolean hasValue(String key) {
         Configuration conf = instance();
         String val = conf.properties.getProperty(key);
-		if(val == null) { 
-			return false; 
-		} else {
-			return true;
-		}
-	}
+        return val != null;
+    }
 
     /**
      * Returns the value for key in the Configuration as a byte, or the default
@@ -491,7 +490,7 @@ public class Configuration {
             return defaultVal;
         }
 
-        byte bval = -1;
+        byte bval;
         try {
             bval = Byte.valueOf(val).byteValue();
         } catch (NumberFormatException nex) {
@@ -518,7 +517,7 @@ public class Configuration {
             return defaultVal;
         }
 
-        short sval = -1;
+        short sval;
         try {
             sval = Short.valueOf(val).shortValue();
         } catch (NumberFormatException nex) {
@@ -545,7 +544,7 @@ public class Configuration {
             return defaultVal;
         }
 
-        int ival = -1;
+        int ival;
         try {
             ival = Integer.valueOf(val).intValue();
         } catch (NumberFormatException nex) {
@@ -554,6 +553,31 @@ public class Configuration {
             ival = defaultVal;
         }
         return ival;
+    }
+
+    /**
+     * Returns the value for key in the Configuration as a character, or a
+     * default value if not found. A warning is issued to the log if the
+     * property is not defined, or if the configuration value is too long
+     * to be a char. If the configuration value is longer than a single
+     * character, only the first character is returned.
+     *
+     * @param key Name of the property
+     * @param defaultVal PARAM
+     * @returnValue assigned to the key, as a character
+     */
+    public static char valueAsChar(String key, char defaultVal) {
+        String val = valueFor(key);
+        if (val == null) {
+            return defaultVal;
+        }
+
+        if(val.length() > 1) {
+            XRLog.exception("Property '" + key + "' was requested as a character. The value of '" +
+                    val + "' is too long to be a char. Returning only the first character.");
+        }
+
+        return val.charAt(0);
     }
 
     /**
@@ -572,7 +596,7 @@ public class Configuration {
             return defaultVal;
         }
 
-        long lval = -1;
+        long lval;
         try {
             lval = Long.valueOf(val).longValue();
         } catch (NumberFormatException nex) {
@@ -599,7 +623,7 @@ public class Configuration {
             return defaultVal;
         }
 
-        float fval = -1;
+        float fval;
         try {
             fval = Float.valueOf(val).floatValue();
         } catch (NumberFormatException nex) {
@@ -626,7 +650,7 @@ public class Configuration {
             return defaultVal;
         }
 
-        double dval = -1;
+        double dval;
         try {
             dval = Double.valueOf(val).doubleValue();
         } catch (NumberFormatException nex) {
@@ -772,7 +796,7 @@ public class Configuration {
                     "should be FQN<dot>constant, is " + val);
             return defaultValue;
         }
-        Class klass = null;
+        Class klass;
         try {
             klass = Class.forName(klassname);
         } catch (ClassNotFoundException e) {
@@ -780,7 +804,7 @@ public class Configuration {
             return defaultValue;
         }
 
-        Object cnstVal = null;
+        Object cnstVal;
         try {
             Field fld = klass.getDeclaredField(cnst);
             try {
@@ -844,6 +868,8 @@ public class Configuration {
         props.setProperty("xr.renderer.draw.backgrounds", "true");
         props.setProperty("xr.renderer.draw.borders", "true");
         props.setProperty("xr.renderer.debug.box-outlines", "false");
+        props.setProperty("xr.renderer.replace-missing-characters", "false");
+        props.setProperty("xr.renderer.missing-character-replacement", "false");
         props.setProperty("xr.text.scale", "1.0");
         props.setProperty("xr.text.aa-smoothing-level", "1");
         props.setProperty("xr.text.aa-fontsize-threshhold", "25");

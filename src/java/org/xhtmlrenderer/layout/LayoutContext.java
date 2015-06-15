@@ -35,17 +35,13 @@ import org.xhtmlrenderer.css.parser.CounterData;
 import org.xhtmlrenderer.css.style.CalculatedStyle;
 import org.xhtmlrenderer.css.style.CssContext;
 import org.xhtmlrenderer.css.value.FontSpecification;
-import org.xhtmlrenderer.extend.FontContext;
-import org.xhtmlrenderer.extend.NamespaceHandler;
-import org.xhtmlrenderer.extend.ReplacedElementFactory;
-import org.xhtmlrenderer.extend.TextRenderer;
-import org.xhtmlrenderer.extend.UserAgentCallback;
+import org.xhtmlrenderer.extend.*;
 import org.xhtmlrenderer.render.Box;
 import org.xhtmlrenderer.render.FSFont;
 import org.xhtmlrenderer.render.FSFontMetrics;
 import org.xhtmlrenderer.render.MarkerData;
 import org.xhtmlrenderer.render.PageBox;
-import org.xhtmlrenderer.swing.RootPanel;
+
 
 /**
  * This class tracks state which changes over the course of a layout run.
@@ -71,21 +67,21 @@ public class LayoutContext implements CssContext {
 
     private int _extraSpaceTop;
     private int _extraSpaceBottom;
-    
+
     private Map _counterContextMap = new HashMap();
-    
+
     private String _pendingPageName;
     private String _pageName;
-    
+
     private int _noPageBreak = 0;
-    
+
     private Layer _rootDocumentLayer;
     private PageBox _page;
-    
+
     private boolean _mayCheckKeepTogether = true;
-    
+
     private BreakAtLineContext _breakAtLineContext;
-    
+
     public TextRenderer getTextRenderer() {
         return _sharedContext.getTextRenderer();
     }
@@ -94,7 +90,7 @@ public class LayoutContext implements CssContext {
         return _sharedContext.getCss();
     }
 
-    public RootPanel getCanvas() {
+    public FSCanvas getCanvas() {
         return _sharedContext.getCanvas();
     }
 
@@ -122,7 +118,7 @@ public class LayoutContext implements CssContext {
         _currentMarkerData = null;
 
         _bfcs = new LinkedList();
-        
+
         if (! keepLayers) {
             _rootLayer = null;
             _layers = new LinkedList();
@@ -140,7 +136,7 @@ public class LayoutContext implements CssContext {
         result.setCurrentMarkerData(_currentMarkerData);
 
         result.setBFCs(_bfcs);
-        
+
         if (isPrint()) {
             result.setPageName(getPageName());
             result.setExtraSpaceBottom(getExtraSpaceBottom());
@@ -158,7 +154,7 @@ public class LayoutContext implements CssContext {
         _currentMarkerData = layoutState.getCurrentMarkerData();
 
         _bfcs = layoutState.getBFCs();
-        
+
         if (isPrint()) {
             setPageName(layoutState.getPageName());
             setExtraSpaceBottom(layoutState.getExtraSpaceBottom());
@@ -173,7 +169,7 @@ public class LayoutContext implements CssContext {
         result.setFirstLetters(_firstLetters.copyOf());
         result.setFirstLines(_firstLines.copyOf());
         result.setCurrentMarkerData(_currentMarkerData);
-        
+
         if (isPrint()) {
             result.setPageName(getPageName());
         }
@@ -186,7 +182,7 @@ public class LayoutContext implements CssContext {
         _firstLetters = layoutState.getFirstLetters();
 
         _currentMarkerData = layoutState.getCurrentMarkerData();
-        
+
         if (isPrint()) {
             setPageName(layoutState.getPageName());
         }
@@ -472,7 +468,7 @@ public class LayoutContext implements CssContext {
     public void setPageName(String currentPageName) {
         _pageName = currentPageName;
     }
-    
+
     public int getNoPageBreak() {
         return _noPageBreak;
     }
@@ -480,7 +476,7 @@ public class LayoutContext implements CssContext {
     public void setNoPageBreak(int noPageBreak) {
         _noPageBreak = noPageBreak;
     }
-    
+
     public boolean isPageBreaksAllowed() {
         return _noPageBreak == 0;
     }

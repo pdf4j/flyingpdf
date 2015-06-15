@@ -1,6 +1,6 @@
 /*
  * StyleReference.java
- * Copyright (c) 2004, 2005 Torbj�rn Gannholm
+ * Copyright (c) 2004, 2005 Torbjoern Gannholm
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public License
@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.logging.Level;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -45,7 +46,7 @@ import org.xhtmlrenderer.util.XRLog;
 
 
 /**
- * @author Torbj�rn Gannholm
+ * @author Torbjoern Gannholm
  */
 public class StyleReference {
     /**
@@ -77,7 +78,7 @@ public class StyleReference {
 
     /** */
     private UserAgentCallback _uac;
-    
+
     /**
      * Default constructor for initializing members.
      *
@@ -105,35 +106,39 @@ public class StyleReference {
         List infos = getStylesheets();
         XRLog.match("media = " + _context.getMedia());
         _matcher = new org.xhtmlrenderer.css.newmatch.Matcher(
-                new DOMTreeResolver(), 
-                attRes, 
-                _stylesheetFactory, 
-                readAndParseAll(infos, _context.getMedia()), 
+                new DOMTreeResolver(),
+                attRes,
+                _stylesheetFactory,
+                readAndParseAll(infos, _context.getMedia()),
                 _context.getMedia());
     }
-    
+
     private List readAndParseAll(List infos, String medium) {
         List result = new ArrayList(infos.size() + 15);
         for (Iterator i = infos.iterator(); i.hasNext(); ) {
             StylesheetInfo info = (StylesheetInfo)i.next();
             if (info.appliesToMedia(medium)) {
                 Stylesheet sheet = info.getStylesheet();
-                
+
                 if (sheet == null) {
                     sheet = _stylesheetFactory.getStylesheet(info);
                 }
-                
-                if (sheet.getImportRules().size() > 0) {
-                    result.addAll(readAndParseAll(sheet.getImportRules(), medium));
+
+                if (sheet!=null) {
+                    if (sheet.getImportRules().size() > 0) {
+                        result.addAll(readAndParseAll(sheet.getImportRules(), medium));
+                    }
+
+                    result.add(sheet);
+                } else {
+                    XRLog.load(Level.WARNING, "Unable to load CSS from " + info.getUri());
                 }
-                
-                result.add(sheet);
             }
         }
-        
+
         return result;
     }
-    
+
     /**
      * Description of the Method
      *
@@ -198,7 +203,7 @@ public class StyleReference {
         if (e == null) return CascadedStyle.emptyCascadedStyle;
         return _matcher.getCascadedStyle(e, restyle);
     }
-    
+
     public PageInfo getPageStyle(String pageName, String pseudoPage) {
         return _matcher.getPageCascadedStyle(pageName, pseudoPage);
     }
@@ -219,7 +224,7 @@ public class StyleReference {
 
         }
     }
-    
+
     public void flushAllStyleSheets() {
         _stylesheetFactory.flushCachedStylesheets();
     }
@@ -246,7 +251,7 @@ public class StyleReference {
         if (refs != null) {
             for (int i = 0; i < refs.length; i++) {
                 String uri;
-                
+
                 if (! refs[i].isInline()) {
                     uri = _uac.resolveURI(refs[i].getUri());
                     refs[i].setUri(uri);
@@ -268,31 +273,31 @@ public class StyleReference {
 
         return infos;
     }
-    
+
     public void removeStyle(Element e) {
         if (_matcher != null) {
             _matcher.removeStyle(e);
         }
     }
-    
+
     public List getFontFaceRules() {
         return _matcher.getFontFaceRules();
     }
-    
+
     public void setUserAgentCallback(UserAgentCallback userAgentCallback) {
         _uac = userAgentCallback;
         _stylesheetFactory.setUserAgentCallback(userAgentCallback);
     }
-    
+
     public void setSupportCMYKColors(boolean b) {
         _stylesheetFactory.setSupportCMYKColors(b);
     }
 }
 
 /*
- * $Id: StyleReference.java,v 1.22 2008/07/27 00:21:46 peterbrant Exp $
+ * $Id$
  *
- * $Log: StyleReference.java,v $
+ * $Log$
  * Revision 1.22  2008/07/27 00:21:46  peterbrant
  * Implement CMYK color support for PDF output, starting with patch from Mykola Gurov / Banish java.awt.Color from FS core layout classes
  *

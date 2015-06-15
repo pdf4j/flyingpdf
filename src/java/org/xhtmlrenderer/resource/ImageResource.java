@@ -20,22 +20,47 @@
 package org.xhtmlrenderer.resource;
 
 import org.xhtmlrenderer.extend.FSImage;
+import org.xhtmlrenderer.swing.MutableFSImage;
+import org.xhtmlrenderer.swing.AWTFSImage;
 import org.xml.sax.InputSource;
 
 /**
  * @author Administrator
  */
 public class ImageResource extends AbstractResource {
+    private final String _imageUri;
     private FSImage _img;
 
     //HACK: at least for now, till we know what we want to do here
-    public ImageResource(FSImage img) {
+    public ImageResource(final String uri, FSImage img) {
         super((InputSource) null);
+        _imageUri = uri;
         _img = img;
     }
 
     public FSImage getImage() {
         return _img;
+    }
+
+    public boolean isLoaded() {
+        return _img instanceof MutableFSImage ? ((MutableFSImage) _img).isLoaded() : true;
+    }
+
+    public String getImageUri() {
+        return _imageUri;
+    }
+
+    public boolean hasDimensions(final int width, final int height) {
+        if (isLoaded()) {
+            if (_img instanceof AWTFSImage) {
+                AWTFSImage awtfi = (AWTFSImage) _img;
+                return awtfi.getWidth() == width && awtfi.getHeight() == height;
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
     }
 }
 

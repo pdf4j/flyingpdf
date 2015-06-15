@@ -19,20 +19,8 @@
  */
 package org.xhtmlrenderer.pdf;
 
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FilenameFilter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
+import com.lowagie.text.DocumentException;
+import com.lowagie.text.pdf.BaseFont;
 import org.xhtmlrenderer.css.constants.CSSName;
 import org.xhtmlrenderer.css.constants.IdentValue;
 import org.xhtmlrenderer.css.sheet.FontFaceRule;
@@ -45,31 +33,60 @@ import org.xhtmlrenderer.render.FSFont;
 import org.xhtmlrenderer.util.XRLog;
 import org.xhtmlrenderer.util.XRRuntimeException;
 
-import com.lowagie.text.DocumentException;
-import com.lowagie.text.pdf.BaseFont;
+import java.io.*;
+import java.util.*;
 
 public class ITextFontResolver implements FontResolver {
     private Map _fontFamilies = createInitialFontMap();
     private Map _fontCache = new HashMap();
-    
-    private SharedContext _sharedContext;
-    
+
+    private final SharedContext _sharedContext;
+
     public ITextFontResolver(SharedContext sharedContext) {
         _sharedContext = sharedContext;
     }
-    
+
+    /**
+     * Utility method which uses iText libraries to determine the family name(s) for the font at the given path.
+     * The iText APIs seem to indicate there can be more than one name, but this method will return a set of them.
+     * Use a name from this list when referencing the font in CSS for PDF output. Note that family names as reported
+     * by iText may vary from those reported by the AWT Font class, e.g. "Arial Unicode MS" for iText and
+     * "ArialUnicodeMS" for AWT.
+     *
+     * @param path local path to the font file
+     * @param encoding same as what you would use for {@link #addFont(String, String, boolean)}
+     * @param embedded same as what you would use for {@link #addFont(String, String, boolean)}
+     * @return set of all family names for the font file, as reported by iText libraries
+     */
+    public static Set getDistinctFontFamilyNames(String path, String encoding, boolean embedded) {
+        BaseFont font = null;
+        try {
+            font = BaseFont.createFont(path, encoding, embedded);
+            String[] fontFamilyNames = TrueTypeUtil.getFamilyNames(font);
+            Set distinct = new HashSet();
+            for (int i = 0; i < fontFamilyNames.length; i++) {
+                distinct.add(fontFamilyNames[i]);
+            }
+            return distinct;
+        } catch (DocumentException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public FSFont resolveFont(SharedContext renderingContext, FontSpecification spec) {
         return resolveFont(renderingContext, spec.families, spec.size, spec.fontWeight, spec.fontStyle, spec.variant);
     }
-    
+
     public void flushCache() {
         _fontFamilies = createInitialFontMap();
         _fontCache = new HashMap();
     }
-    
+
     public void flushFontFaceFonts() {
         _fontCache = new HashMap();
-        
+
         for (Iterator i = _fontFamilies.values().iterator(); i.hasNext(); ) {
             FontFamily family = (FontFamily)i.next();
             for (Iterator j = family.getFontDescriptions().iterator(); j.hasNext(); ) {
@@ -83,23 +100,23 @@ public class ITextFontResolver implements FontResolver {
             }
         }
     }
-    
+
     public void importFontFaces(List fontFaces) {
         for (Iterator i = fontFaces.iterator(); i.hasNext(); ) {
             FontFaceRule rule = (FontFaceRule)i.next();
             CalculatedStyle style = rule.getCalculatedStyle();
-            
+
             FSDerivedValue src = style.valueByName(CSSName.SRC);
             if (src == IdentValue.NONE) {
                 continue;
             }
-            
+
             byte[] font1 = _sharedContext.getUac().getBinaryResource(src.asString());
             if (font1 == null) {
                 XRLog.exception("Could not load font " + src.asString());
                 continue;
             }
-            
+
             byte[] font2 = null;
             FSDerivedValue metricsSrc = style.valueByName(CSSName.FS_FONT_METRIC_SRC);
             if (metricsSrc != IdentValue.NONE) {
@@ -109,19 +126,33 @@ public class ITextFontResolver implements FontResolver {
                     continue;
                 }
             }
-            
+
             if (font2 != null) {
                 byte[] t = font1;
                 font1 = font2;
                 font2 = t;
             }
-            
+
             boolean embedded = style.isIdent(CSSName.FS_PDF_FONT_EMBED, IdentValue.EMBED);
-            
             String encoding = style.getStringProperty(CSSName.FS_PDF_FONT_ENCODING);
-            
+            String fontFamily = null;
+            IdentValue fontWeight = null;
+            IdentValue fontStyle = null;
+
+            if (rule.hasFontFamily()) {
+                fontFamily = style.valueByName(CSSName.FONT_FAMILY).asString();
+            }
+
+            if (rule.hasFontWeight()) {
+                fontWeight = style.getIdent(CSSName.FONT_WEIGHT);
+            }
+
+            if (rule.hasFontStyle()) {
+                fontStyle = style.getIdent(CSSName.FONT_STYLE);
+            }
+
             try {
-                addFontFaceFont(src.asString(), encoding, embedded, font1, font2);
+                addFontFaceFont(fontFamily, fontWeight, fontStyle, src.asString(), encoding, embedded, font1, font2);
             } catch (DocumentException e) {
                 XRLog.exception("Could not load font " + src.asString(), e);
                 continue;
@@ -130,8 +161,8 @@ public class ITextFontResolver implements FontResolver {
             }
         }
     }
-    
-    public void addFontDirectory(String dir, boolean embedded) 
+
+    public void addFontDirectory(String dir, boolean embedded)
             throws DocumentException, IOException {
         File f = new File(dir);
         if (f.isDirectory()) {
@@ -146,163 +177,140 @@ public class ITextFontResolver implements FontResolver {
             }
         }
     }
-    
-    public void addFont(String path, boolean embedded) 
+
+    public void addFont(String path, boolean embedded)
             throws DocumentException, IOException {
         addFont(path, BaseFont.CP1252, embedded);
     }
-    
-    public void addFont(String path, String encoding, boolean embedded) 
-            throws DocumentException, IOException { 
+
+    public void addFont(String path, String encoding, boolean embedded)
+            throws DocumentException, IOException {
         addFont(path, encoding, embedded, null);
     }
-    
-    /**
-     * Add font but ignore the font family attribute within the font and use the
-     * fontFamilyName parameter instead.
-     * 
-     * @param path
-     * @param fontFamilyName
-     * @param encoding
-     * @param embedded
-     * @param pathToPFB
-     * @throws DocumentException
-     * @throws IOException
-     */
-    public void addFont(String path, String fontFamilyName, String encoding, boolean embedded,
-            String pathToPFB) throws DocumentException, IOException {
-        String lower = path.toLowerCase();
-        if (lower.endsWith(".otf") || lower.endsWith(".ttf") || lower.indexOf(".ttc,") != -1) {
-            BaseFont font = BaseFont.createFont(path, encoding, embedded);
 
-            if (fontFamilyName == null)
-                fontFamilyName = TrueTypeUtil.getFamilyName(font);
-            
-            FontFamily fontFamily = getFontFamily(fontFamilyName);
-
-            FontDescription descr = new FontDescription(font);
-            try {
-                TrueTypeUtil.populateDescription(path, font, descr);
-            } catch (Exception e) {
-                throw new XRRuntimeException(e.getMessage(), e);
-            }
-
-            fontFamily.addFontDescription(descr);
-        } else if (lower.endsWith(".ttc")) {
-            String[] names = BaseFont.enumerateTTCNames(path);
-            for (int i = 0; i < names.length; i++) {
-                addFont(path + "," + i, fontFamilyName, encoding, embedded, null);
-            }
-        } else if (lower.endsWith(".afm") || lower.endsWith(".pfm")) {
-            if (embedded && pathToPFB == null) {
-                throw new IOException(
-                        "When embedding a font, path to PFB/PFA file must be specified");
-            }
-
-            BaseFont font = BaseFont.createFont(path, encoding, embedded, false, null,
-                    readFile(pathToPFB));
-
-            if (fontFamilyName == null)
-                fontFamilyName = font.getFamilyFontName()[0][3];
-            
-            FontFamily fontFamily = getFontFamily(fontFamilyName);
-
-            FontDescription descr = new FontDescription(font);
-            // XXX Need to set weight, underline position, etc. This information
-            // is contained in the AFM file (and even parsed by Type1Font), but
-            // unfortunately it isn't exposed to the caller.
-            fontFamily.addFontDescription(descr);
-        } else {
-            throw new IOException("Unsupported font type");
-        }
+    public void addFont(String path, String encoding, boolean embedded, String pathToPFB)
+            throws DocumentException, IOException {
+        addFont(path, null, encoding, embedded, pathToPFB);
     }
-    
-    public void addFont(String path, String encoding, boolean embedded, String pathToPFB) 
+
+    public void addFont(String path, String fontFamilyNameOverride,
+            String encoding, boolean embedded, String pathToPFB)
             throws DocumentException, IOException {
         String lower = path.toLowerCase();
         if (lower.endsWith(".otf") || lower.endsWith(".ttf") || lower.indexOf(".ttc,") != -1) {
             BaseFont font = BaseFont.createFont(path, encoding, embedded);
-            
-            String fontFamilyName = TrueTypeUtil.getFamilyName(font);
-            FontFamily fontFamily = getFontFamily(fontFamilyName);
-            
-            FontDescription descr = new FontDescription(font);
-            try {
-                TrueTypeUtil.populateDescription(path, font, descr);
-            } catch (Exception e) {
-                throw new XRRuntimeException(e.getMessage(), e);
+
+            String[] fontFamilyNames;
+            if (fontFamilyNameOverride != null) {
+                fontFamilyNames = new String[] { fontFamilyNameOverride };
+            } else {
+                fontFamilyNames = TrueTypeUtil.getFamilyNames(font);
             }
-            
-            fontFamily.addFontDescription(descr);
+
+            for (int i = 0; i < fontFamilyNames.length; i++) {
+                String fontFamilyName = fontFamilyNames[i];
+                FontFamily fontFamily = getFontFamily(fontFamilyName);
+
+                FontDescription descr = new FontDescription(font);
+                try {
+                    TrueTypeUtil.populateDescription(path, font, descr);
+                } catch (Exception e) {
+                    throw new XRRuntimeException(e.getMessage(), e);
+                }
+
+                fontFamily.addFontDescription(descr);
+            }
         } else if (lower.endsWith(".ttc")) {
             String[] names = BaseFont.enumerateTTCNames(path);
             for (int i = 0; i < names.length; i++) {
-                addFont(path + "," + i, encoding, embedded);
+                addFont(path + "," + i, fontFamilyNameOverride, encoding, embedded, null);
             }
         } else if (lower.endsWith(".afm") || lower.endsWith(".pfm")) {
             if (embedded && pathToPFB == null) {
                 throw new IOException("When embedding a font, path to PFB/PFA file must be specified");
             }
-            
+
             BaseFont font = BaseFont.createFont(
                     path, encoding, embedded, false, null, readFile(pathToPFB));
-            
-            String fontFamilyName = font.getFamilyFontName()[0][3];
+
+            String fontFamilyName;
+            if (fontFamilyNameOverride != null) {
+                fontFamilyName = fontFamilyNameOverride;
+            } else {
+                fontFamilyName = font.getFamilyFontName()[0][3];
+            }
+
             FontFamily fontFamily = getFontFamily(fontFamilyName);
-            
+
             FontDescription descr = new FontDescription(font);
             // XXX Need to set weight, underline position, etc.  This information
             // is contained in the AFM file (and even parsed by Type1Font), but
             // unfortunately it isn't exposed to the caller.
-            fontFamily.addFontDescription(descr);            
+            fontFamily.addFontDescription(descr);
         } else {
             throw new IOException("Unsupported font type");
         }
     }
-    
+
     private void addFontFaceFont(
-            String uri, String encoding, boolean embedded, byte[] afmttf, byte[] pfb) 
+            String fontFamilyNameOverride, IdentValue fontWeightOverride, IdentValue fontStyleOverride, String uri, String encoding, boolean embedded, byte[] afmttf, byte[] pfb)
             throws DocumentException, IOException {
         String lower = uri.toLowerCase();
         if (lower.endsWith(".otf") || lower.endsWith(".ttf") || lower.indexOf(".ttc,") != -1) {
             BaseFont font = BaseFont.createFont(uri, encoding, embedded, false, afmttf, pfb);
-            
-            String fontFamilyName = TrueTypeUtil.getFamilyName(font);
-            FontFamily fontFamily = getFontFamily(fontFamilyName);
-            
-            FontDescription descr = new FontDescription(font);
-            try {
-                TrueTypeUtil.populateDescription(uri, afmttf, font, descr);
-            } catch (Exception e) {
-                throw new XRRuntimeException(e.getMessage(), e);
+
+            String[] fontFamilyNames;
+            if (fontFamilyNameOverride != null) {
+                fontFamilyNames = new String[] { fontFamilyNameOverride };
+            } else {
+                fontFamilyNames = TrueTypeUtil.getFamilyNames(font);
             }
-            
-            descr.setFromFontFace(true);
-            
-            fontFamily.addFontDescription(descr);
+
+            for (int i = 0; i < fontFamilyNames.length; i++) {
+                FontFamily fontFamily = getFontFamily(fontFamilyNames[i]);
+
+                FontDescription descr = new FontDescription(font);
+                try {
+                    TrueTypeUtil.populateDescription(uri, afmttf, font, descr);
+                } catch (Exception e) {
+                    throw new XRRuntimeException(e.getMessage(), e);
+                }
+
+                descr.setFromFontFace(true);
+
+                if (fontWeightOverride != null) {
+                    descr.setWeight(convertWeightToInt(fontWeightOverride));
+                }
+
+                if (fontStyleOverride != null) {
+                    descr.setStyle(fontStyleOverride);
+                }
+
+                fontFamily.addFontDescription(descr);
+            }
         } else if (lower.endsWith(".afm") || lower.endsWith(".pfm") || lower.endsWith(".pfb") || lower.endsWith(".pfa")) {
             if (embedded && pfb == null) {
                 throw new IOException("When embedding a font, path to PFB/PFA file must be specified");
             }
-            
+
             String name = uri.substring(0, uri.length()-4) + ".afm";
             BaseFont font = BaseFont.createFont(
                     name, encoding, embedded, false, afmttf, pfb);
-            
+
             String fontFamilyName = font.getFamilyFontName()[0][3];
             FontFamily fontFamily = getFontFamily(fontFamilyName);
-            
+
             FontDescription descr = new FontDescription(font);
             descr.setFromFontFace(true);
             // XXX Need to set weight, underline position, etc.  This information
             // is contained in the AFM file (and even parsed by Type1Font), but
             // unfortunately it isn't exposed to the caller.
-            fontFamily.addFontDescription(descr);            
+            fontFamily.addFontDescription(descr);
         } else {
             throw new IOException("Unsupported font type");
         }
-    }    
-    
+    }
+
     private byte[] readFile(String path) throws IOException {
         File f = new File(path);
         if (f.exists()) {
@@ -317,7 +325,7 @@ public class ITextFontResolver implements FontResolver {
                 }
                 is.close();
                 is = null;
-                
+
                 return result.toByteArray();
             } finally {
                 if (is != null) {
@@ -332,7 +340,7 @@ public class ITextFontResolver implements FontResolver {
             throw new IOException("File " + path + " does not exist or is not accessible");
         }
     }
-    
+
     public FontFamily getFontFamily(String fontFamilyName) {
         FontFamily fontFamily = (FontFamily)_fontFamilies.get(fontFamilyName);
         if (fontFamily == null) {
@@ -342,9 +350,9 @@ public class ITextFontResolver implements FontResolver {
         }
         return fontFamily;
     }
-    
+
     private FSFont resolveFont(SharedContext ctx, String[] families, float size, IdentValue weight, IdentValue style, IdentValue variant) {
-        if (! (style == IdentValue.NORMAL || style == IdentValue.OBLIQUE 
+        if (! (style == IdentValue.NORMAL || style == IdentValue.OBLIQUE
                 || style == IdentValue.ITALIC)) {
             style = IdentValue.NORMAL;
         }
@@ -356,10 +364,10 @@ public class ITextFontResolver implements FontResolver {
                 }
             }
         }
-        
+
         return resolveFont(ctx, "Serif", size, weight, style, variant);
     }
-    
+
     private String normalizeFontFamily(String fontFamily) {
         String result = fontFamily;
         // strip off the "s if they are there
@@ -380,19 +388,20 @@ public class ITextFontResolver implements FontResolver {
         else if (result.equalsIgnoreCase("monospace")) {
             result = "Monospaced";
         }
-        
+
         return result;
     }
-    
+
     private FSFont resolveFont(SharedContext ctx, String fontFamily, float size, IdentValue weight, IdentValue style, IdentValue variant) {
         String normalizedFontFamily = normalizeFontFamily(fontFamily);
 
         String cacheKey = getHashName(normalizedFontFamily, weight, style);
         FontDescription result = (FontDescription)_fontCache.get(cacheKey);
+
         if (result != null) {
             return new ITextFSFont(result, size);
         }
-        
+
         FontFamily family = (FontFamily)_fontFamilies.get(normalizedFontFamily);
         if (family != null) {
             result = family.match(convertWeightToInt(weight), style);
@@ -401,11 +410,11 @@ public class ITextFontResolver implements FontResolver {
                 return new ITextFSFont(result, size);
             }
         }
-        
+
         return null;
     }
-    
-    private int convertWeightToInt(IdentValue weight) {
+
+    public static int convertWeightToInt(IdentValue weight) {
         if (weight == IdentValue.NORMAL) {
             return 400;
         } else if (weight == IdentValue.BOLD) {
@@ -437,36 +446,47 @@ public class ITextFontResolver implements FontResolver {
         }
         throw new IllegalArgumentException();
     }
-    
+
     protected static String getHashName(
             String name, IdentValue weight, IdentValue style) {
         return name + "-" + weight + "-" + style;
     }
-    
+
     private static Map createInitialFontMap() {
         HashMap result = new HashMap();
-        
+
         try {
             addCourier(result);
             addTimes(result);
             addHelvetica(result);
+            addSymbol(result);
+            addZapfDingbats(result);
+
+            // Try and load the iTextAsian fonts
+            if(ITextFontResolver.class.getClassLoader().getResource("com/lowagie/text/pdf/fonts/cjkfonts.properties") != null) {
+                addCJKFonts(result);
+            }
         } catch (DocumentException e) {
             throw new RuntimeException(e.getMessage(), e);
         } catch (IOException e) {
-            throw new RuntimeException(e.getMessage(), e);            
+            throw new RuntimeException(e.getMessage(), e);
         }
 
         return result;
     }
-    
+
     private static BaseFont createFont(String name) throws DocumentException, IOException {
-        return BaseFont.createFont(name, "winansi", true);
+        return ITextFontResolver.createFont(name, "winansi", true);
+    }
+
+    private static BaseFont createFont(String name, String encoding, boolean embedded) throws DocumentException, IOException {
+        return BaseFont.createFont(name, encoding, embedded);
     }
 
     private static void addCourier(HashMap result) throws DocumentException, IOException {
         FontFamily courier = new FontFamily();
         courier.setName("Courier");
-        
+
         courier.addFontDescription(new FontDescription(
                 createFont(BaseFont.COURIER_BOLDOBLIQUE), IdentValue.OBLIQUE, 700));
         courier.addFontDescription(new FontDescription(
@@ -474,17 +494,17 @@ public class ITextFontResolver implements FontResolver {
         courier.addFontDescription(new FontDescription(
                 createFont(BaseFont.COURIER_BOLD), IdentValue.NORMAL, 700));
         courier.addFontDescription(new FontDescription(
-                createFont(BaseFont.COURIER), IdentValue.NORMAL, 400));        
-        
+                createFont(BaseFont.COURIER), IdentValue.NORMAL, 400));
+
         result.put("DialogInput", courier);
         result.put("Monospaced", courier);
         result.put("Courier", courier);
     }
-    
+
     private static void addTimes(HashMap result) throws DocumentException, IOException {
         FontFamily times = new FontFamily();
         times.setName("Times");
-        
+
         times.addFontDescription(new FontDescription(
                 createFont(BaseFont.TIMES_BOLDITALIC), IdentValue.ITALIC, 700));
         times.addFontDescription(new FontDescription(
@@ -492,16 +512,16 @@ public class ITextFontResolver implements FontResolver {
         times.addFontDescription(new FontDescription(
                 createFont(BaseFont.TIMES_BOLD), IdentValue.NORMAL, 700));
         times.addFontDescription(new FontDescription(
-                createFont(BaseFont.TIMES_ROMAN), IdentValue.NORMAL, 400));  
-        
+                createFont(BaseFont.TIMES_ROMAN), IdentValue.NORMAL, 400));
+
         result.put("Serif", times);
         result.put("TimesRoman", times);
     }
-    
+
     private static void addHelvetica(HashMap result) throws DocumentException, IOException {
         FontFamily helvetica = new FontFamily();
         helvetica.setName("Helvetica");
-        
+
         helvetica.addFontDescription(new FontDescription(
                 createFont(BaseFont.HELVETICA_BOLDOBLIQUE), IdentValue.OBLIQUE, 700));
         helvetica.addFontDescription(new FontDescription(
@@ -509,16 +529,83 @@ public class ITextFontResolver implements FontResolver {
         helvetica.addFontDescription(new FontDescription(
                 createFont(BaseFont.HELVETICA_BOLD), IdentValue.NORMAL, 700));
         helvetica.addFontDescription(new FontDescription(
-                createFont(BaseFont.HELVETICA), IdentValue.NORMAL, 400));  
-        
+                createFont(BaseFont.HELVETICA), IdentValue.NORMAL, 400));
+
         result.put("Dialog", helvetica);
         result.put("SansSerif", helvetica);
-    } 
-    
+        result.put("Helvetica", helvetica);
+    }
+
+    private static void addSymbol(Map result) throws DocumentException, IOException {
+        FontFamily fontFamily = new FontFamily();
+        fontFamily.setName("Symbol");
+
+        fontFamily.addFontDescription(new FontDescription(createFont(BaseFont.SYMBOL, BaseFont.CP1252, false), IdentValue.NORMAL, 400));
+
+        result.put("Symbol", fontFamily);
+    }
+
+    private static void addZapfDingbats(Map result) throws DocumentException, IOException {
+        FontFamily fontFamily = new FontFamily();
+        fontFamily.setName("ZapfDingbats");
+
+        fontFamily.addFontDescription(new FontDescription(createFont(BaseFont.ZAPFDINGBATS, BaseFont.CP1252, false), IdentValue.NORMAL, 400));
+
+        result.put("ZapfDingbats", fontFamily);
+    }
+
+    // fontFamilyName, fontName, encoding
+    private static final String[][] cjkFonts = {
+            {"STSong-Light-H", "STSong-Light", "UniGB-UCS2-H"},
+            {"STSong-Light-V", "STSong-Light", "UniGB-UCS2-V"},
+            {"STSongStd-Light-H", "STSongStd-Light", "UniGB-UCS2-H"},
+            {"STSongStd-Light-V", "STSongStd-Light", "UniGB-UCS2-V"},
+            {"MHei-Medium-H", "MHei-Medium", "UniCNS-UCS2-H"},
+            {"MHei-Medium-V", "MHei-Medium", "UniCNS-UCS2-V"},
+            {"MSung-Light-H", "MSung-Light", "UniCNS-UCS2-H"},
+            {"MSung-Light-V", "MSung-Light", "UniCNS-UCS2-V"},
+            {"MSungStd-Light-H", "MSungStd-Light", "UniCNS-UCS2-H"},
+            {"MSungStd-Light-V", "MSungStd-Light", "UniCNS-UCS2-V"},
+            {"HeiseiMin-W3-H", "HeiseiMin-W3", "UniJIS-UCS2-H"},
+            {"HeiseiMin-W3-V", "HeiseiMin-W3", "UniJIS-UCS2-V"},
+            {"HeiseiKakuGo-W5-H", "HeiseiKakuGo-W5", "UniJIS-UCS2-H"},
+            {"HeiseiKakuGo-W5-V", "HeiseiKakuGo-W5", "UniJIS-UCS2-V"},
+            {"KozMinPro-Regular-H", "KozMinPro-Regular", "UniJIS-UCS2-HW-H"},
+            {"KozMinPro-Regular-V", "KozMinPro-Regular", "UniJIS-UCS2-HW-V"},
+            {"HYGoThic-Medium-H", "HYGoThic-Medium", "UniKS-UCS2-H"},
+            {"HYGoThic-Medium-V", "HYGoThic-Medium", "UniKS-UCS2-V"},
+            {"HYSMyeongJo-Medium-H", "HYSMyeongJo-Medium", "UniKS-UCS2-H"},
+            {"HYSMyeongJo-Medium-V", "HYSMyeongJo-Medium", "UniKS-UCS2-V"},
+            {"HYSMyeongJoStd-Medium-H", "HYSMyeongJoStd-Medium", "UniKS-UCS2-H"},
+            {"HYSMyeongJoStd-Medium-V", "HYSMyeongJoStd-Medium", "UniKS-UCS2-V"}
+    };
+
+    private static void addCJKFonts(Map fontFamilyMap) throws DocumentException, IOException {
+        for(int i = 0; i < cjkFonts.length; i++) {
+            String fontFamilyName = cjkFonts[i][0];
+            String fontName = cjkFonts[i][1];
+            String encoding = cjkFonts[i][2];
+
+            addCJKFont(fontFamilyName, fontName, encoding, fontFamilyMap);
+        }
+    }
+
+    private static void addCJKFont(String fontFamilyName, String fontName, String encoding, Map fontFamilyMap) throws DocumentException, IOException {
+        FontFamily fontFamily = new FontFamily();
+        fontFamily.setName(fontFamilyName);
+
+        fontFamily.addFontDescription(new FontDescription(createFont(fontName+",BoldItalic", encoding, false), IdentValue.OBLIQUE, 700));
+        fontFamily.addFontDescription(new FontDescription(createFont(fontName+",Italic", encoding, false), IdentValue.OBLIQUE, 400));
+        fontFamily.addFontDescription(new FontDescription(createFont(fontName+",Bold", encoding, false), IdentValue.NORMAL, 700));
+        fontFamily.addFontDescription(new FontDescription(createFont(fontName, encoding, false), IdentValue.NORMAL, 400));
+
+        fontFamilyMap.put(fontFamilyName, fontFamily);
+    }
+
     private static class FontFamily {
         private String _name;
         private List _fontDescriptions;
-        
+
         public FontFamily() {
         }
 
@@ -538,7 +625,7 @@ public class ITextFontResolver implements FontResolver {
                             FontDescription f2 = (FontDescription)o2;
                             return f1.getWeight() - f2.getWeight();
                         }
-            });
+                    });
         }
 
         public String getName() {
@@ -548,38 +635,38 @@ public class ITextFontResolver implements FontResolver {
         public void setName(String name) {
             _name = name;
         }
-        
+
         public FontDescription match(int desiredWeight, IdentValue style) {
             if (_fontDescriptions == null) {
                 throw new RuntimeException("fontDescriptions is null");
             }
-            
+
             List candidates = new ArrayList();
-            
+
             for (Iterator i = _fontDescriptions.iterator(); i.hasNext(); ) {
                 FontDescription description = (FontDescription)i.next();
-                
+
                 if (description.getStyle() == style) {
                     candidates.add(description);
                 }
             }
-            
+
             if (candidates.size() == 0) {
                 if (style == IdentValue.ITALIC) {
                     return match(desiredWeight, IdentValue.OBLIQUE);
                 } else if (style == IdentValue.OBLIQUE) {
                     return match(desiredWeight, IdentValue.NORMAL);
                 } else {
-                    return null;
+                    candidates.addAll(_fontDescriptions);
                 }
             }
-            
-            FontDescription[] matches = (FontDescription[]) 
-                candidates.toArray(new FontDescription[candidates.size()]);
+
+            FontDescription[] matches = (FontDescription[])
+                    candidates.toArray(new FontDescription[candidates.size()]);
             FontDescription result;
-            
+
             result = findByWeight(matches, desiredWeight, SM_EXACT);
-            
+
             if (result != null) {
                 return result;
             } else {
@@ -590,19 +677,19 @@ public class ITextFontResolver implements FontResolver {
                 }
             }
         }
-        
+
         private static final int SM_EXACT = 1;
         private static final int SM_LIGHTER_OR_DARKER = 2;
         private static final int SM_DARKER_OR_LIGHTER = 3;
-        
-        private FontDescription findByWeight(FontDescription[] matches, 
+
+        private FontDescription findByWeight(FontDescription[] matches,
                 int desiredWeight, int searchMode) {
             if (searchMode == SM_EXACT) {
                 for (int i = 0; i < matches.length; i++) {
                     FontDescription descr = matches[i];
                     if (descr.getWeight() == desiredWeight) {
                         return descr;
-                    } 
+                    }
                 }
                 return null;
             } else if (searchMode == SM_LIGHTER_OR_DARKER){
@@ -614,13 +701,13 @@ public class ITextFontResolver implements FontResolver {
                         break;
                     }
                 }
-                
+
                 if (offset > 0 && descr.getWeight() > desiredWeight) {
                     return matches[offset-1];
                 } else {
                     return descr;
                 }
-                
+
             } else if (searchMode == SM_DARKER_OR_LIGHTER) {
                 int offset = 0;
                 FontDescription descr = null;
@@ -630,39 +717,39 @@ public class ITextFontResolver implements FontResolver {
                         break;
                     }
                 }
-                
+
                 if (offset != matches.length - 1 && descr.getWeight() < desiredWeight) {
                     return matches[offset+1];
                 } else {
                     return descr;
                 }
             }
-            
+
             return null;
         }
     }
-    
+
     public static class FontDescription {
         private IdentValue _style;
         private int _weight;
-        
+
         private BaseFont _font;
-        
+
         private float _underlinePosition;
         private float _underlineThickness;
-        
+
         private float _yStrikeoutSize;
         private float _yStrikeoutPosition;
-        
+
         private boolean _isFromFontFace;
-        
+
         public FontDescription() {
         }
-        
+
         public FontDescription(BaseFont font) {
             this(font, IdentValue.NORMAL, 400);
         }
-        
+
         public FontDescription(BaseFont font, IdentValue style, int weight) {
             _font = font;
             _style = style;
@@ -731,11 +818,11 @@ public class ITextFontResolver implements FontResolver {
         public void setYStrikeoutSize(float strikeoutSize) {
             _yStrikeoutSize = strikeoutSize;
         }
-        
+
         private void setMetricDefaults() {
             _underlinePosition = -50;
             _underlineThickness = 50;
-            
+
             int[] box = _font.getCharBBox('x');
             if (box != null) {
                 _yStrikeoutPosition = box[3] / 2 + 50;
@@ -753,5 +840,5 @@ public class ITextFontResolver implements FontResolver {
         public void setFromFontFace(boolean isFromFontFace) {
             _isFromFontFace = isFromFontFace;
         }
-    }    
+    }
 }

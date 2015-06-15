@@ -24,11 +24,7 @@ import java.awt.Rectangle;
 import org.xhtmlrenderer.context.StyleReference;
 import org.xhtmlrenderer.css.style.CssContext;
 import org.xhtmlrenderer.css.value.FontSpecification;
-import org.xhtmlrenderer.extend.FontContext;
-import org.xhtmlrenderer.extend.FontResolver;
-import org.xhtmlrenderer.extend.OutputDevice;
-import org.xhtmlrenderer.extend.TextRenderer;
-import org.xhtmlrenderer.extend.UserAgentCallback;
+import org.xhtmlrenderer.extend.*;
 import org.xhtmlrenderer.layout.Layer;
 import org.xhtmlrenderer.layout.SharedContext;
 import org.xhtmlrenderer.swing.RootPanel;
@@ -43,16 +39,16 @@ public class RenderingContext implements CssContext {
     protected SharedContext sharedContext;
     private OutputDevice outputDevice;
     private FontContext fontContext;
-    
+
     private int pageCount;
-    
+
     private int pageNo;
     private PageBox page;
-    
+
     private Layer rootLayer;
-    
+
     private int initialPageNo;
-    
+
     /**
      * <p/>
      * needs a new instance every run
@@ -84,11 +80,11 @@ public class RenderingContext implements CssContext {
     public float getMmPerDot() {
         return sharedContext.getMmPerPx();
     }
-    
+
     public int getDotsPerPixel() {
         return sharedContext.getDotsPerPixel();
-    }    
-    
+    }
+
     public float getFontSize2D(FontSpecification font) {
         return sharedContext.getFont(font).getSize2D();
     }
@@ -117,12 +113,12 @@ public class RenderingContext implements CssContext {
     public FontResolver getFontResolver() {
         return sharedContext.getFontResolver();
     }
-    
+
     public FSFont getFont(FontSpecification font) {
         return sharedContext.getFont(font);
     }
 
-    public RootPanel getCanvas() {
+    public FSCanvas getCanvas() {
         return sharedContext.getCanvas();
     }
 
@@ -131,21 +127,21 @@ public class RenderingContext implements CssContext {
         if (! isPrint()) {
             result = sharedContext.getFixedRectangle();
         } else {
-            result = new Rectangle(0, -this.page.getTop(), 
+            result = new Rectangle(0, -this.page.getTop(),
                     this.page.getContentWidth(this),
                     this.page.getContentHeight(this)-1);
         }
         result.translate(-1, -1);
         return result;
     }
-    
+
     public Rectangle getViewportRectangle() {
         Rectangle result = new Rectangle(getFixedRectangle());
         result.y *= -1;
-        
+
         return result;
     }
-    
+
     public boolean debugDrawBoxes() {
         return sharedContext.debugDrawBoxes();
     }
@@ -206,15 +202,15 @@ public class RenderingContext implements CssContext {
     public int getPageNo() {
         return pageNo;
     }
-    
+
     public StyleReference getCss() {
         return sharedContext.getCss();
     }
-    
+
     public FSFontMetrics getFSFontMetrics(FSFont font) {
         return getTextRenderer().getFSFontMetrics(getFontContext(), font, "");
     }
-    
+
     public Layer getRootLayer() {
         return rootLayer;
     }
@@ -229,7 +225,7 @@ public class RenderingContext implements CssContext {
 
     public void setInitialPageNo(int initialPageNo) {
         this.initialPageNo = initialPageNo;
-    }    
+    }
 
     public Box getBoxById(String id) {
         return sharedContext.getBoxById(id);

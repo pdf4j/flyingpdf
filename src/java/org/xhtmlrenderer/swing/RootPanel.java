@@ -22,24 +22,37 @@ package org.xhtmlrenderer.swing;
 import java.awt.Color;
 import java.awt.Container;
 import java.awt.Dimension;
+import java.awt.EventQueue;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Insets;
 import java.awt.Rectangle;
-import java.awt.event.ComponentEvent;
-import java.awt.event.ComponentListener;
 import java.awt.event.MouseEvent;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.logging.Level;
 
+import javax.swing.CellRendererPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JViewport;
+import javax.swing.Scrollable;
+import javax.swing.SwingConstants;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import org.w3c.dom.css.CSSPrimitiveValue;
+import org.xhtmlrenderer.css.constants.CSSName;
+import org.xhtmlrenderer.css.constants.IdentValue;
+import org.xhtmlrenderer.css.parser.FSRGBColor;
+import org.xhtmlrenderer.css.parser.PropertyValue;
+import org.xhtmlrenderer.css.style.CalculatedStyle;
+import org.xhtmlrenderer.css.style.derived.ColorValue;
+import org.xhtmlrenderer.css.style.derived.LengthValue;
+import org.xhtmlrenderer.css.style.derived.StringValue;
 import org.xhtmlrenderer.event.DocumentListener;
+import org.xhtmlrenderer.extend.FSCanvas;
 import org.xhtmlrenderer.extend.NamespaceHandler;
 import org.xhtmlrenderer.extend.UserInterface;
 import org.xhtmlrenderer.layout.BoxBuilder;
@@ -52,38 +65,37 @@ import org.xhtmlrenderer.render.PageBox;
 import org.xhtmlrenderer.render.RenderingContext;
 import org.xhtmlrenderer.render.ViewportBox;
 import org.xhtmlrenderer.util.Configuration;
-import org.xhtmlrenderer.util.Uu;
 import org.xhtmlrenderer.util.XRLog;
 
 
-public class RootPanel extends JPanel implements ComponentListener, UserInterface {
+public class RootPanel extends JPanel implements Scrollable, UserInterface, FSCanvas, RepaintListener {
     static final long serialVersionUID = 1L;
+
+    private Box rootBox = null;
+    private boolean needRelayout = false;
+    private CellRendererPane cellRendererPane;
+    protected Map documentListeners;
+
+    private boolean defaultFontFromComponent;
 
     public RootPanel() {
     }
 
-    protected Map documentListeners;
-
     public SharedContext getSharedContext() {
         return sharedContext;
     }
-    
+
     public LayoutContext getLayoutContext() {
-        return layout_context;
+        return layoutContext;
     }
 
     protected SharedContext sharedContext;
 
-    //TODO: layout_context should not be stored!
-    private volatile LayoutContext layout_context;
-
-    private Box rootBox = null;
-
-    private boolean pendingResize = false;
+    private volatile LayoutContext layoutContext;
 
     public void setDocument(Document doc, String url, NamespaceHandler nsh) {
-		fireDocumentStarted();
-		resetScrollPosition();
+        fireDocumentStarted();
+        resetScrollPosition();
         setRootBox(null);
         this.doc = doc;
 
@@ -93,7 +105,7 @@ public class RootPanel extends JPanel implements ComponentListener, UserInterfac
         } else {
             getSharedContext().getCss().flushAllStyleSheets();
         }
-        
+
         getSharedContext().reset();
         getSharedContext().setBaseURL(url);
         getSharedContext().setNamespaceHandler(nsh);
@@ -102,7 +114,30 @@ public class RootPanel extends JPanel implements ComponentListener, UserInterfac
         repaint();
     }
 
+    // iterates over all boxes and, if they have a BG url assigned, makes a call to the UAC
+    // to request it. when running with async image loading, this means BG images will start
+    // loading before the box ever shows on screen
+    private void requestBGImages(final Box box) {
+        if (box.getChildCount() == 0) return;
+        Iterator ci = box.getChildIterator();
+        while (ci.hasNext()) {
+            final Box cb = (Box) ci.next();
+            CalculatedStyle style = cb.getStyle();
+            if (!style.isIdent(CSSName.BACKGROUND_IMAGE, IdentValue.NONE)) {
+                String uri = style.getStringProperty(CSSName.BACKGROUND_IMAGE);
+                XRLog.load(Level.FINE, "Greedily loading background property " + uri);
+                try {
+                    getSharedContext().getUac().getImageResource(uri);
+                } catch (Exception ex) {
+                    // swallow
+                }
+            }
+            requestBGImages(cb);
+        }
+    }
+
     protected JScrollPane enclosingScrollPane;
+    private boolean viewportMatchWidth = true;
     public void resetScrollPosition() {
         if (this.enclosingScrollPane != null) {
             this.enclosingScrollPane.getVerticalScrollBar().setValue(0);
@@ -118,16 +153,11 @@ public class RootPanel extends JPanel implements ComponentListener, UserInterfac
      *                   the panel is no longer enclosed in a {@link JScrollPane}.
      */
     protected void setEnclosingScrollPane(JScrollPane scrollPane) {
-        // if a scrollpane is already installed we remove it.
-        if (enclosingScrollPane != null) {
-            enclosingScrollPane.removeComponentListener(this);
-        }
 
         enclosingScrollPane = scrollPane;
 
         if (enclosingScrollPane != null) {
-            Uu.p("added root panel as a component listener to the scroll pane");
-            enclosingScrollPane.addComponentListener(this);
+//            Uu.p("added root panel as a component listener to the scroll pane");
             default_scroll_mode = enclosingScrollPane.getViewport().getScrollMode();
         }
     }
@@ -191,15 +221,16 @@ public class RootPanel extends JPanel implements ComponentListener, UserInterfac
         getSharedContext().setCanvas(this);
 
         XRLog.layout(Level.FINEST, "new context end");
-        
+
         RenderingContext result = getSharedContext().newRenderingContextInstance();
         result.setFontContext(new Java2DFontContext(g));
         result.setOutputDevice(new Java2DOutputDevice(g));
-        
+
         getSharedContext().getTextRenderer().setup(result.getFontContext());
-        
-        if (rootBox != null) {
-            result.setRootLayer(rootBox.getLayer());
+
+        final Box rb = getRootBox();
+        if (rb != null) {
+            result.setRootLayer(rb.getLayer());
         }
 
         return result;
@@ -213,29 +244,29 @@ public class RootPanel extends JPanel implements ComponentListener, UserInterfac
         XRLog.layout(Level.FINEST, "new context end");
 
         LayoutContext result = getSharedContext().newLayoutContextInstance();
-        
-        Graphics2D layoutGraphics = 
-            g.getDeviceConfiguration().createCompatibleImage(1, 1).createGraphics();
+
+        Graphics2D layoutGraphics =
+                g.getDeviceConfiguration().createCompatibleImage(1, 1).createGraphics();
         result.setFontContext(new Java2DFontContext(layoutGraphics));
-        
+
         getSharedContext().getTextRenderer().setup(result.getFontContext());
-        
+
         return result;
     }
-    
+
     private Rectangle getInitialExtents(LayoutContext c) {
         if (! c.isPrint()) {
             Rectangle extents = getScreenExtents();
-            
+
             // HACK avoid bogus warning
             if (extents.width == 0 && extents.height == 0) {
                 extents = new Rectangle(0, 0, 1, 1);
             }
-            
+
             return extents;
         } else {
             PageBox first = Layer.createPageBox(c, "first");
-            return new Rectangle(0, 0, 
+            return new Rectangle(0, 0,
                     first.getContentWidth(c), first.getContentHeight(c));
         }
     }
@@ -248,6 +279,9 @@ public class RootPanel extends JPanel implements ComponentListener, UserInterfac
             //Uu.p("bnds = " + bnds);
         } else {
             extents = new Rectangle(getWidth(), getHeight());//200, 200 ) );
+            Insets insets = getInsets();
+            extents.width -= insets.left + insets.right;
+            extents.height -= insets.top + insets.bottom;
         }
         return extents;
     }
@@ -261,72 +295,67 @@ public class RootPanel extends JPanel implements ComponentListener, UserInterfac
             if (doc == null) {
                 return;
             }
-            
+
             LayoutContext c = newLayoutContext((Graphics2D) g);
             synchronized (this) {
-                this.layout_context = c;
+                this.layoutContext = c;
             }
-            
+
             long start = System.currentTimeMillis();
-            
-            BlockBox root = (BlockBox)getRootBox(); 
-            if (root != null && isPendingResize()) {
+
+            BlockBox root = (BlockBox)getRootBox();
+            if (root != null && isNeedRelayout()) {
                 root.reset(c);
             } else {
                 root = BoxBuilder.createRootBox(c, doc);
-                setRootBox(root);            
+                setRootBox(root);
             }
-            
-            root.setContainingBlock(new ViewportBox(getInitialExtents(c)));
+
+            initFontFromComponent(root);
+
+            Rectangle initialExtents = getInitialExtents(c);
+            root.setContainingBlock(new ViewportBox(initialExtents));
+
             root.layout(c);
-            
+
             long end = System.currentTimeMillis();
-            
+
             XRLog.layout(Level.INFO, "Layout took " + (end - start) + "ms");
-            
+
             /*
             System.out.println(root.dump(c, "", BlockBox.DUMP_LAYOUT));
             */
-            
-    // if there is a fixed child then we need to set opaque to false
-    // so that the entire viewport will be repainted. this is slower
-    // but that's the hit you get from using fixed layout
+
+            // if there is a fixed child then we need to set opaque to false
+            // so that the entire viewport will be repainted. this is slower
+            // but that's the hit you get from using fixed layout
             if (root.getLayer().containsFixedContent()) {
                 super.setOpaque(false);
             } else {
                 super.setOpaque(true);
             }
-            
+
             XRLog.layout(Level.FINEST, "after layout: " + root);
-            
+
             Dimension intrinsic_size = root.getLayer().getPaintingDimension(c);
-            
+
             if (c.isPrint()) {
                 root.getLayer().trimEmptyPages(c, intrinsic_size.height);
                 root.getLayer().layoutPages(c);
             }
-            
+
+            // If the initial size we fed into the layout matches the width
+            // of the layout generated then we can set the scrollable property
+            // that matches width of the view pane to the width of this panel.
+            // Otherwise, if the intrinsic width is different then we can't
+            // couple the width of the view pane to the width of this panel
+            // (we hit the minimum size threshold).
+            viewportMatchWidth = (initialExtents.width == intrinsic_size.width);
+
             setPreferredSize(intrinsic_size);
             revalidate();
-            
-            // if doc is shorter than viewport
-            // then stretch canvas to fill viewport exactly
-            // then adjust the body element accordingly
+
             if (enclosingScrollPane != null) {
-                if (intrinsic_size.height < enclosingScrollPane.getViewport().getHeight()) {
-                    //Uu.p("int height is less than viewport height");
-                    // XXX Not threadsafe
-                    if (enclosingScrollPane.getViewport().getHeight() != this.getHeight()) {
-                        this.setPreferredSize(new Dimension(
-                                intrinsic_size.width, enclosingScrollPane.getViewport().getHeight()));
-                        this.revalidate();
-                    }
-                    //Uu.p("need to do the body hack");
-                    if (root != null && ! c.isPrint()) {
-                        intrinsic_size.height = root.getHeight();
-                    }
-                } 
-                
                 // turn on simple scrolling mode if there's any fixed elements
                 if (root.getLayer().containsFixedContent()) {
                     // Uu.p("is fixed");
@@ -335,9 +364,18 @@ public class RootPanel extends JPanel implements ComponentListener, UserInterfac
                     // Uu.p("is not fixed");
                     enclosingScrollPane.getViewport().setScrollMode(default_scroll_mode);
                 }
-            } 
+            }
 
             this.fireDocumentLoaded();
+            /* FIXME
+            if (Configuration.isTrue("xr.image.background.greedy", false)) {
+                EventQueue.invokeLater(new Runnable() {
+                    public void run() {
+                        XRLog.load("loading images in document and css greedily");
+                        requestBGImages(getRootBox());
+                    }
+                });
+            }*/
         } catch (ThreadDeath t) {
             throw t;
         } catch (Throwable t) {
@@ -350,24 +388,48 @@ public class RootPanel extends JPanel implements ComponentListener, UserInterfac
                 if (t instanceof RuntimeException) {
                     throw (RuntimeException)t;
                 }
-                
+
                 // "Shouldn't" happen
                 XRLog.exception(t.getMessage(), t);
             }
         }
     }
 
-	protected void fireDocumentStarted() {
-		Iterator it = this.documentListeners.keySet().iterator();
-		while (it.hasNext()) {
-			DocumentListener list = (DocumentListener) it.next();
+    private void initFontFromComponent(BlockBox root) {
+        if (isDefaultFontFromComponent()) {
+            CalculatedStyle style = root.getStyle();
+            PropertyValue fontFamilyProp = new PropertyValue(CSSPrimitiveValue.CSS_STRING, getFont().getFamily(),
+                    getFont().getFamily());
+            fontFamilyProp.setStringArrayValue(new String[] { fontFamilyProp.getStringValue() });
+            style.setDefaultValue(CSSName.FONT_FAMILY, new StringValue(CSSName.FONT_FAMILY, fontFamilyProp));
+            style.setDefaultValue(CSSName.FONT_SIZE, new LengthValue(style, CSSName.FONT_SIZE,
+                    new PropertyValue(CSSPrimitiveValue.CSS_PX, getFont().getSize(), Integer
+                            .toString(getFont().getSize()))));
+            Color c = getForeground();
+            style.setDefaultValue(CSSName.COLOR, new ColorValue(CSSName.COLOR,
+                    new PropertyValue(new FSRGBColor(c.getRed(), c.getGreen(), c.getBlue()))));
+
+            if (getFont().isBold()) {
+                style.setDefaultValue(CSSName.FONT_WEIGHT, IdentValue.BOLD);
+            }
+
+            if (getFont().isItalic()) {
+                style.setDefaultValue(CSSName.FONT_STYLE, IdentValue.ITALIC);
+            }
+        }
+    }
+
+    protected void fireDocumentStarted() {
+        Iterator it = this.documentListeners.keySet().iterator();
+        while (it.hasNext()) {
+            DocumentListener list = (DocumentListener) it.next();
             try {
                 list.documentStarted();
             } catch (Exception e) {
                 XRLog.load(Level.WARNING, "Document listener threw an exception; continuing processing", e);
             }
         }
-	}
+    }
 
     protected void fireDocumentLoaded() {
         Iterator it = this.documentListeners.keySet().iterator();
@@ -380,7 +442,7 @@ public class RootPanel extends JPanel implements ComponentListener, UserInterfac
             }
         }
     }
-    
+
     protected void fireOnLayoutException(Throwable t) {
         Iterator it = this.documentListeners.keySet().iterator();
         while (it.hasNext()) {
@@ -392,7 +454,7 @@ public class RootPanel extends JPanel implements ComponentListener, UserInterfac
             }
         }
     }
-    
+
     protected void fireOnRenderException(Throwable t) {
         Iterator it = this.documentListeners.keySet().iterator();
         while (it.hasNext()) {
@@ -403,6 +465,18 @@ public class RootPanel extends JPanel implements ComponentListener, UserInterfac
                 XRLog.load(Level.WARNING, "Document listener threw an exception; continuing processing", e);
             }
         }
+    }
+
+    /**
+     * @return a CellRendererPane suitable for drawing components in (with CellRendererPane.paintComponent)
+     */
+    public CellRendererPane getCellRendererPane() {
+        if (cellRendererPane == null || cellRendererPane.getParent() != this) {
+            cellRendererPane = new CellRendererPane();
+            this.add(cellRendererPane);
+        }
+
+        return cellRendererPane;
     }
 
 
@@ -436,28 +510,11 @@ public class RootPanel extends JPanel implements ComponentListener, UserInterfac
         return false;
     }
 
-    public void componentHidden(ComponentEvent e) {
-    }
-
-    public void componentMoved(ComponentEvent e) {
-    }
-
-    public void componentResized(ComponentEvent e) {
-        Uu.p("componentResized() " + this.getSize());
-        Uu.p("viewport = " + enclosingScrollPane.getViewport().getSize());
-        if (! getSharedContext().isPrint()) {
-            relayout(enclosingScrollPane.getViewport().getSize());
-        }
-    }
-    
-    protected void relayout(Dimension viewportSize) {
+    protected void relayout() {
         if (doc != null) {
-            setPendingResize(true);
+            setNeedRelayout(true);
             repaint();
         }
-    }
-
-    public void componentShown(ComponentEvent e) {
     }
 
     public double getLayoutWidth() {
@@ -475,7 +532,7 @@ public class RootPanel extends JPanel implements ComponentListener, UserInterfac
     public synchronized Box getRootBox() {
         return rootBox;
     }
-    
+
     public synchronized void setRootBox(Box rootBox) {
         this.rootBox = rootBox;
     }
@@ -483,24 +540,148 @@ public class RootPanel extends JPanel implements ComponentListener, UserInterfac
     public synchronized Layer getRootLayer() {
         return getRootBox() == null ? null : getRootBox().getLayer();
     }
-    
+
     public Box find(MouseEvent e) {
         return find(e.getX(), e.getY());
     }
-    
+
     public Box find(int x, int y) {
         Layer l = getRootLayer();
         if (l != null) {
-            return l.find(layout_context, x, y, false);
+            return l.find(layoutContext, x, y, false);
         }
         return null;
     }
 
-    protected synchronized boolean isPendingResize() {
-        return pendingResize;
+    public void doLayout() {
+        if (isExtentsHaveChanged()) {
+            setNeedRelayout(true);
+        }
+        super.doLayout();
     }
 
-    protected synchronized void setPendingResize(boolean pendingResize) {
-        this.pendingResize = pendingResize;
+    public void validate() {
+        super.validate();
+
+        if (isExtentsHaveChanged()) {
+            setNeedRelayout(true);
+        }
     }
+
+    protected boolean isExtentsHaveChanged() {
+        if (rootBox == null) {
+            return true;
+        } else {
+            Rectangle oldExtents = ((ViewportBox)rootBox.getContainingBlock()).getExtents();
+            if (! oldExtents.equals(getScreenExtents())) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+    }
+
+    protected synchronized boolean isNeedRelayout() {
+        return needRelayout;
+    }
+
+    protected synchronized void setNeedRelayout(boolean needRelayout) {
+        this.needRelayout = needRelayout;
+    }
+
+    // On-demand repaint requests for async image loading
+    private long lastRepaintRunAt = System.currentTimeMillis();
+    private final long maxRepaintRequestWaitMs = 50;
+    private boolean repaintRequestPending = false;
+    private long pendingRepaintCount = 0;
+
+    public void repaintRequested(final boolean doLayout) {
+        final long now = System.currentTimeMillis();
+        final long el = now - lastRepaintRunAt;
+        if (!doLayout || el > maxRepaintRequestWaitMs || pendingRepaintCount > 5) {
+            XRLog.general(Level.FINE, "*** Repainting panel, by request, el: " + el + " pending " + pendingRepaintCount);
+            if (doLayout) {
+                relayout();
+            } else {
+                repaint();
+            }
+            lastRepaintRunAt = System.currentTimeMillis();
+            repaintRequestPending = false;
+            pendingRepaintCount = 0;
+        } else {
+            if (!repaintRequestPending) {
+                XRLog.general(Level.FINE, "... Queueing new repaint request, el: " + el + " < " + maxRepaintRequestWaitMs);
+                repaintRequestPending = true;
+                new Thread(new Runnable() {
+                    public void run() {
+                        try {
+                            Thread.currentThread().sleep(Math.min(maxRepaintRequestWaitMs, Math.abs(maxRepaintRequestWaitMs - el)));
+                            EventQueue.invokeLater(new Runnable() {
+                                public void run() {
+                                    XRLog.general(Level.FINE, "--> running queued repaint request");
+                                    repaintRequested(doLayout);
+                                    repaintRequestPending = false;
+                                }
+                            });
+                        } catch (InterruptedException e) {
+                            // swallow
+                        }
+                    }
+                }).start();
+            } else {
+                pendingRepaintCount++;
+                XRLog.general("hmm... repaint request, but already have one");
+            }
+        }
+    }
+
+    public boolean isDefaultFontFromComponent() {
+        return defaultFontFromComponent;
+    }
+
+    public void setDefaultFontFromComponent(boolean defaultFontFromComponent) {
+        this.defaultFontFromComponent = defaultFontFromComponent;
+    }
+
+    // ----- Scrollable interface -----
+
+    public Dimension getPreferredScrollableViewportSize() {
+        return getPreferredSize();
+    }
+
+    public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction) {
+        int dif = 1;
+        if (orientation == SwingConstants.VERTICAL) {
+            dif = visibleRect.height;
+        }
+        else if (orientation == SwingConstants.HORIZONTAL) {
+            dif = visibleRect.width;
+        }
+        return Math.min(35, dif);
+    }
+
+    public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation, int direction) {
+        int dif = 1;
+        if (orientation == SwingConstants.VERTICAL) {
+            dif = Math.max(visibleRect.height - 10, dif);
+        }
+        else if (orientation == SwingConstants.HORIZONTAL) {
+            dif = Math.max(visibleRect.width, dif);
+        }
+        return dif;
+    }
+
+    public boolean getScrollableTracksViewportWidth() {
+        // If the last layout successfully filled the desired width then
+        // viewport should match the component size.
+        return viewportMatchWidth;
+    }
+
+    public boolean getScrollableTracksViewportHeight() {
+        // If the last layout height of this component is <= the viewport
+        // height then we make the viewport height match the component size.
+        int viewportHeight = enclosingScrollPane.getViewport().getHeight();
+        return getPreferredSize().height <= viewportHeight;
+    }
+
 }
