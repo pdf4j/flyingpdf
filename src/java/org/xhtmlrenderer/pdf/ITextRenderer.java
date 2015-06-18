@@ -296,6 +296,8 @@ public class ITextRenderer {
                 doc.newPage();
                 _outputDevice.initializePage(writer.getDirectContent(), nextPageSize.getHeight());
             }
+
+            currentPage.clear();
         }
 
         _outputDevice.finish(renderingContext, _root);
