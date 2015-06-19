@@ -237,9 +237,6 @@ public class ITextRenderer {
         //initialising output device
         //------------------------------------------------------------------------------
         List pages = _root.getLayer().getPages();
-        if(docListener != null) {
-            docListener.setPageCount(pages.size());
-        }
 
         RenderingContext renderingContext = newRenderingContext();
         renderingContext.setInitialPageNo(0);
@@ -275,9 +272,10 @@ public class ITextRenderer {
         _root.getLayer().assignPagePaintingPositions(renderingContext, Layer.PAGED_MODE_PRINT);
 
         int pageCount = _root.getLayer().getPages().size();
+        if(docListener != null) {
+            docListener.setPageCount(pageCount);
+        }
         renderingContext.setPageCount(pageCount);
-        //firePreWrite(pageCount); // opportunity to adjust meta data
-        //setDidValues(doc); // set PDF header fields from meta data
 
         for (int i = 0; i < pageCount; i++) {
             PageBox currentPage = (PageBox) pages.get(i);
