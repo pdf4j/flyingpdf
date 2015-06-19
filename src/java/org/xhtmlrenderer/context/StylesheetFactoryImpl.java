@@ -88,6 +88,7 @@ public class StylesheetFactoryImpl implements StylesheetFactory {
      */
     private Stylesheet parse(StylesheetInfo info) {
         CSSResource cr = _userAgentCallback.getCSSResource(info.getUri());
+        if (cr==null) return null;
         // Whether by accident or design, InputStream will never be null
         // since the null resource stream is wrapped in a BufferedInputStream
         InputStream is = cr.getResourceInputSource().getByteStream();

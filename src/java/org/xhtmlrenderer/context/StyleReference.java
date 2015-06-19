@@ -122,12 +122,15 @@ public class StyleReference {
                 if (sheet == null) {
                     sheet = _stylesheetFactory.getStylesheet(info);
                 }
-                
-                if (sheet.getImportRules().size() > 0) {
-                    result.addAll(readAndParseAll(sheet.getImportRules(), medium));
+
+                if (sheet != null)
+                {
+                    if (sheet.getImportRules().size() > 0) {
+                        result.addAll(readAndParseAll(sheet.getImportRules(), medium));
+                    }
+
+                    result.add(sheet);
                 }
-                
-                result.add(sheet);
             }
         }
         
