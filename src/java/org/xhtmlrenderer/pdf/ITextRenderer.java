@@ -215,9 +215,7 @@ public class ITextRenderer {
     }
 
     private LayoutContext createLayoutContext() {
-        //------------------------------------------------------------------------------
         //creation layout context and root layout
-        //------------------------------------------------------------------------------
         LayoutContext layoutContext = newLayoutContext();
         BlockBox root = BoxBuilder.createRootBox(layoutContext, _doc);
         root.setContainingBlock(new ViewportBox(getInitialExtents(layoutContext)));
@@ -230,17 +228,17 @@ public class ITextRenderer {
     }
 
     private RenderingContext initRenderingContext(OutputStream os, DocListener docListener) throws DocumentException {
-        //------------------------------------------------------------------------------
-        //initialising rendering context
-        //------------------------------------------------------------------------------
         List pages = _root.getLayer().getPages();
 
+        //create and init rendering context
         RenderingContext renderingContext = newRenderingContext();
         renderingContext.setInitialPageNo(0);
         PageBox firstPage = (PageBox) pages.get(0);
         com.lowagie.text.Rectangle firstPageSize = new com.lowagie.text.Rectangle(0, 0, firstPage.getWidth(renderingContext) / _dotsPerPoint,
                 firstPage.getHeight(renderingContext) / _dotsPerPoint);
 
+        //creatind main pdf entity - iText document (which represents actual pisical pdf document) and pdf
+        // content writer
         com.lowagie.text.Document doc = new com.lowagie.text.Document(firstPageSize, 0, 0, 0, 0);
         PdfWriter writer = docListener == null ? PdfWriter.getInstance(doc, os) :
                 PdfWriter.getInstance(doc, os, docListener);
@@ -257,7 +255,9 @@ public class ITextRenderer {
         return renderingContext;
     }
 
-    private void intiOutputDevice(RenderingContext renderingContext) {
+    private void initOutputDevice(RenderingContext renderingContext) {
+        //init outputDevive, which emulates "screen" in memory for layout and rendering html content (and transform
+        // it to pdf)
         PageBox firstPage = (PageBox) _root.getLayer().getPages().get(0);
         com.lowagie.text.Rectangle firstPageSize = new com.lowagie.text.Rectangle(0, 0, firstPage.getWidth(renderingContext) / _dotsPerPoint,
                 firstPage.getHeight(renderingContext) / _dotsPerPoint);
@@ -271,9 +271,6 @@ public class ITextRenderer {
 
     private void writePageByPage(LayoutContext layoutContext, RenderingContext renderingContext,
             DocListener docListener) {
-        //------------------------------------------------------------------------------
-        //writing page by page
-        //------------------------------------------------------------------------------
         _root.getLayer().assignPagePaintingPositions(renderingContext, Layer.PAGED_MODE_PRINT);
         List pages = _root.getLayer().getPages();
 
@@ -283,24 +280,34 @@ public class ITextRenderer {
         }
         renderingContext.setPageCount(pageCount);
 
-        for (int i = 0; i < pageCount; i++) {
-            PageBox currentPage = (PageBox) pages.get(i);
-            if(i > 0) {
-                currentPage.layout(layoutContext);
-            }
+        //first page was "layouted" during creation of layout context (in createLayoutContext()), painting it here
+        PageBox currentPage = null;
+        if (pageCount > 0) {
+            currentPage = (PageBox) pages.get(0);
+            renderingContext.setPage(0, currentPage);
+            paintPage(renderingContext, _writer, currentPage);
+            _outputDevice.finishPage();
+        }
 
+        //painting all the rest pages
+        for (int i = 1; i < pageCount; i++) {
+            currentPage = (PageBox) pages.get(i);
+            //init new page in pdf file
+            com.lowagie.text.Rectangle currentPageSize = new com.lowagie.text.Rectangle(0, 0, currentPage.getWidth(renderingContext) / _dotsPerPoint,
+                    currentPage.getHeight(renderingContext) / _dotsPerPoint);
+            _pdfDoc.setPageSize(currentPageSize);
+            _pdfDoc.newPage();
+            _outputDevice.initializePage(_writer.getDirectContent(), currentPageSize.getHeight());
+
+            //layout page
+            currentPage.layout(layoutContext);
+
+            //render page
             renderingContext.setPage(i, currentPage);
             paintPage(renderingContext, _writer, currentPage);
             _outputDevice.finishPage();
-            if (i != pageCount - 1) {
-                PageBox nextPage = (PageBox) pages.get(i + 1);
-                com.lowagie.text.Rectangle nextPageSize = new com.lowagie.text.Rectangle(0, 0, nextPage.getWidth(renderingContext) / _dotsPerPoint,
-                        nextPage.getHeight(renderingContext) / _dotsPerPoint);
-                _pdfDoc.setPageSize(nextPageSize);
-                _pdfDoc.newPage();
-                _outputDevice.initializePage(_writer.getDirectContent(), nextPageSize.getHeight());
-            }
 
+            //cleaning resources
             currentPage.clear();
         }
     }
@@ -312,14 +319,14 @@ public class ITextRenderer {
         layoutContext.setRootDocumentLayer(layoutContext.getRootLayer());
         ((PageBox)(_root.getLayer().getPages().get(0))).layout(layoutContext);
 
-        //initialising export envirinment, creating rendering context
+        //initialising export environment, creating rendering context
         RenderingContext renderingContext = initRenderingContext(os, docListener);
 
         //open PDF document
         firePreOpen();
         _pdfDoc.open();
 
-        intiOutputDevice(renderingContext);
+        initOutputDevice(renderingContext);
 
         writePageByPage(layoutContext, renderingContext, docListener);
 

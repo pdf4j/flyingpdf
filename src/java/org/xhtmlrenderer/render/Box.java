@@ -109,6 +109,7 @@ public abstract class Box implements Styleable {
         _relativeOffset = null;
         _paintingInfo = null;
         _workingMargin = null;
+        //fields below are required for correct box positioning, never deletes them!
         //_pseudoElementOrClass = null;
         //_parent = null;
         //_style = null;
