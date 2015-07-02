@@ -215,7 +215,7 @@ public class ITextRenderer {
     }
 
     private LayoutContext createLayoutContext() {
-        //creation layout context and root layout
+        //creating layout context and root layout
         LayoutContext layoutContext = newLayoutContext();
         BlockBox root = BoxBuilder.createRootBox(layoutContext, _doc);
         root.setContainingBlock(new ViewportBox(getInitialExtents(layoutContext)));
@@ -234,7 +234,7 @@ public class ITextRenderer {
         com.lowagie.text.Rectangle firstPageSize = new com.lowagie.text.Rectangle(0, 0, firstPage.getWidth(renderingContext) / _dotsPerPoint,
                 firstPage.getHeight(renderingContext) / _dotsPerPoint);
 
-        // creatind main pdf entities - iText document (which represents actual pisical pdf document) and pdf
+        // creating main pdf entities - iText document (which represents actual phisical pdf document) and pdf
         // content writer
         com.lowagie.text.Document doc = new com.lowagie.text.Document(firstPageSize, 0, 0, 0, 0);
         PdfWriter writer = docListener == null ? PdfWriter.getInstance(doc, os) :
@@ -251,8 +251,8 @@ public class ITextRenderer {
     }
 
     private void initOutputDevice(RenderingContext renderingContext) {
-        //init outputDevive, which emulates "screen" in memory for layout and rendering html content (and transform
-        // it to pdf)
+        // init outputDevice, which emulates "screen" in memory for layout and rendering html
+        // content (and transform it to pdf)
         PageBox firstPage = (PageBox) _root.getLayer().getPages().get(0);
         com.lowagie.text.Rectangle firstPageSize = new com.lowagie.text.Rectangle(0, 0, firstPage.getWidth(renderingContext) / _dotsPerPoint,
                 firstPage.getHeight(renderingContext) / _dotsPerPoint);
@@ -284,7 +284,7 @@ public class ITextRenderer {
             _outputDevice.finishPage();
         }
 
-        //painting all the rest pages
+        //painting the rest of the pages
         for (int i = 1; i < pageCount; i++) {
             currentPage = (PageBox) pages.get(i);
             //init new page in pdf file
@@ -328,7 +328,7 @@ public class ITextRenderer {
 
         writePageByPage(layoutContext, renderingContext, docListener);
 
-        //finishing andclosing stuff
+        //finish and close
         _outputDevice.finish(renderingContext, _root);
         fireOnClose();
         _pdfDoc.close();
