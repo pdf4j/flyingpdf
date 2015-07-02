@@ -227,17 +227,14 @@ public class ITextRenderer {
         return layoutContext;
     }
 
-    private RenderingContext initRenderingContext(OutputStream os, DocListener docListener) throws DocumentException {
+    private void initExportEnvironment(RenderingContext renderingContext, OutputStream os, DocListener docListener)
+            throws DocumentException {
         List pages = _root.getLayer().getPages();
-
-        //create and init rendering context
-        RenderingContext renderingContext = newRenderingContext();
-        renderingContext.setInitialPageNo(0);
         PageBox firstPage = (PageBox) pages.get(0);
         com.lowagie.text.Rectangle firstPageSize = new com.lowagie.text.Rectangle(0, 0, firstPage.getWidth(renderingContext) / _dotsPerPoint,
                 firstPage.getHeight(renderingContext) / _dotsPerPoint);
 
-        //creatind main pdf entity - iText document (which represents actual pisical pdf document) and pdf
+        // creatind main pdf entities - iText document (which represents actual pisical pdf document) and pdf
         // content writer
         com.lowagie.text.Document doc = new com.lowagie.text.Document(firstPageSize, 0, 0, 0, 0);
         PdfWriter writer = docListener == null ? PdfWriter.getInstance(doc, os) :
@@ -251,8 +248,6 @@ public class ITextRenderer {
         }
         _pdfDoc = doc;
         _writer = writer;
-
-        return renderingContext;
     }
 
     private void initOutputDevice(RenderingContext renderingContext) {
@@ -319,8 +314,11 @@ public class ITextRenderer {
         layoutContext.setRootDocumentLayer(layoutContext.getRootLayer());
         ((PageBox)(_root.getLayer().getPages().get(0))).layout(layoutContext);
 
-        //initialising export environment, creating rendering context
-        RenderingContext renderingContext = initRenderingContext(os, docListener);
+        //create and init rendering context
+        RenderingContext renderingContext = newRenderingContext();
+        renderingContext.setInitialPageNo(0);
+
+        initExportEnvironment(renderingContext, os, docListener);
 
         //open PDF document
         firePreOpen();

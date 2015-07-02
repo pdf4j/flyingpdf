@@ -356,6 +356,7 @@ public class Layer {
                 paintLayers(c, getSortedLayers(POSITIVE));
             }
 
+            //cleaning boxes after rendering
             if (clip != null) {
                 Rectangle paintingArea = c.getOutputDevice().getClip().getBounds();
                 for (int i = 0; i < blocks.size(); i++) {
