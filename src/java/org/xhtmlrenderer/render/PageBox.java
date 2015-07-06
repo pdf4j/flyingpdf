@@ -87,6 +87,7 @@ public class PageBox {
         this._metadata = null;
         this._marginAreas = null;
         this._pageInfo = null;
+        //_style is required for correct box positioning, never delete it!
 //        this._style = null;
     }
 
