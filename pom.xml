@@ -23,9 +23,9 @@
     </distributionManagement>
 
     <scm>
-        <connection>scm:svn:https://svn.atlassian.com/svn/public/atlassian/vendor/xhtmlrenderer-8.0/trunk</connection>
-        <developerConnection>scm:svn:https://svn.atlassian.com/svn/public/atlassian/vendor/xhtmlrenderer-8.0/trunk</developerConnection>
-        <url>https://svn.atlassian.com/svn/public/atlassian/vendor/xhtmlrenderer-8.0/trunk</url>
+        <connection>scm:git:ssh://git@bitbucket.org/atlassian/xhtmlrenderer-atlassian.git</connection>
+        <developerConnection>scm:git:ssh://git@bitbucket.org/atlassian/xhtmlrenderer-atlassian.git</developerConnection>
+        <url>https://bitbucket.org/atlassian/xhtmlrenderer-atlassian</url>
     </scm>
 
     <build>
