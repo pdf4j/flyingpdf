@@ -81,7 +81,16 @@ public class PageBox {
     private MarginAreaContainer[] _marginAreas = new MarginAreaContainer[MARGIN_AREA_DEFS.length];
     
     private Element _metadata;
-    
+
+    public void clear()
+    {
+        this._metadata = null;
+        this._marginAreas = null;
+        this._pageInfo = null;
+        //_style is required for correct box positioning, never delete it!
+//        this._style = null;
+    }
+
     public int getWidth(CssContext cssCtx) {
         resolvePageDimensions(cssCtx);
         

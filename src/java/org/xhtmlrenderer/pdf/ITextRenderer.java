@@ -60,6 +60,7 @@ import org.xhtmlrenderer.simple.extend.XhtmlNamespaceHandler;
 import org.xhtmlrenderer.util.Configuration;
 import org.xml.sax.InputSource;
 
+import com.lowagie.text.DocListener;
 import com.lowagie.text.DocumentException;
 import com.lowagie.text.pdf.PdfWriter;
 
@@ -68,18 +69,18 @@ public class ITextRenderer {
     // These two defaults combine to produce an effective resolution of 96 px to the inch
     private static final float DEFAULT_DOTS_PER_POINT = 20f * 4f / 3f;
     private static final int DEFAULT_DOTS_PER_PIXEL = 20;
-    
+
     private SharedContext _sharedContext;
     private ITextOutputDevice _outputDevice;
-    
+
     private Document _doc;
     private BlockBox _root;
-    
+
     private float _dotsPerPoint;
-    
+
     private com.lowagie.text.Document _pdfDoc;
     private PdfWriter _writer;
-    
+
     private PDFEncryption _pdfEncryption;
 
     // note: not hard-coding a default version in the _pdfVersion field as this may change between iText releases
@@ -101,50 +102,50 @@ public class ITextRenderer {
     public ITextRenderer() {
         this(DEFAULT_DOTS_PER_POINT, DEFAULT_DOTS_PER_PIXEL);
     }
-    
+
     public ITextRenderer(float dotsPerPoint, int dotsPerPixel) {
         _dotsPerPoint = dotsPerPoint;
-        
+
         _outputDevice = new ITextOutputDevice(_dotsPerPoint);
-        
+
         ITextUserAgent userAgent = new ITextUserAgent(_outputDevice);
         _sharedContext = new SharedContext(userAgent);
         userAgent.setSharedContext(_sharedContext);
         _outputDevice.setSharedContext(_sharedContext);
-        
+
         ITextFontResolver fontResolver = new ITextFontResolver(_sharedContext);
         _sharedContext.setFontResolver(fontResolver);
-        
-        ITextReplacedElementFactory replacedElementFactory = 
+
+        ITextReplacedElementFactory replacedElementFactory =
             new ITextReplacedElementFactory(_outputDevice);
         _sharedContext.setReplacedElementFactory(replacedElementFactory);
-        
+
         _sharedContext.setTextRenderer(new ITextTextRenderer());
         _sharedContext.setDPI(72*_dotsPerPoint);
         _sharedContext.setDotsPerPixel(dotsPerPixel);
         _sharedContext.setPrint(true);
         _sharedContext.setInteractive(false);
     }
-    
+
     public ITextFontResolver getFontResolver() {
         return (ITextFontResolver)_sharedContext.getFontResolver();
     }
-    
+
     private Document loadDocument(final String uri) {
         return _sharedContext.getUac().getXMLResource(uri).getDocument();
     }
-    
+
     public void setDocument(String uri) {
         setDocument(loadDocument(uri), uri);
     }
-    
+
     public void setDocument(Document doc, String url) {
         setDocument(doc, url, new XhtmlNamespaceHandler());
     }
 
     public void setDocument(File file)
             throws IOException {
-        
+
         File parent = file.getAbsoluteFile().getParentFile();
         setDocument(
                 loadDocument(file.toURI().toURL().toExternalForm()),
@@ -161,9 +162,9 @@ public class ITextRenderer {
 
     public void setDocument(Document doc, String url, NamespaceHandler nsh) {
         _doc = doc;
-        
+
         getFontResolver().flushFontFaceFonts();
-        
+
         _sharedContext.reset();
         if (Configuration.isTrue("xr.cache.stylesheets", true)) {
             _sharedContext.getCss().flushStyleSheets();
@@ -173,7 +174,7 @@ public class ITextRenderer {
         _sharedContext.setBaseURL(url);
         _sharedContext.setNamespaceHandler(nsh);
         _sharedContext.getCss().setDocumentContext(
-                _sharedContext, _sharedContext.getNamespaceHandler(), 
+                _sharedContext, _sharedContext.getNamespaceHandler(),
                 doc, new NullUserInterface());
         getFontResolver().importFontFaces(_sharedContext.getCss().getFontFaceRules());
     }
@@ -212,22 +213,142 @@ public class ITextRenderer {
         root.getLayer().layoutPages(c);
         _root = root;
     }
-    
+
+    private LayoutContext createLayoutContext() {
+        //creating layout context and root layout
+        LayoutContext layoutContext = newLayoutContext();
+        BlockBox root = BoxBuilder.createRootBox(layoutContext, _doc);
+        root.setContainingBlock(new ViewportBox(getInitialExtents(layoutContext)));
+        root.layout(layoutContext);
+        Dimension dim = root.getLayer().getPaintingDimension(layoutContext);
+        root.getLayer().trimEmptyPages(layoutContext, dim.height);
+
+        _root = root;
+        return layoutContext;
+    }
+
+    private void initExportEnvironment(RenderingContext renderingContext, OutputStream os, DocListener docListener)
+            throws DocumentException {
+        List pages = _root.getLayer().getPages();
+        PageBox firstPage = (PageBox) pages.get(0);
+        com.lowagie.text.Rectangle firstPageSize = new com.lowagie.text.Rectangle(0, 0, firstPage.getWidth(renderingContext) / _dotsPerPoint,
+                firstPage.getHeight(renderingContext) / _dotsPerPoint);
+
+        // creating main pdf entities - iText document (which represents actual phisical pdf document) and pdf
+        // content writer
+        com.lowagie.text.Document doc = new com.lowagie.text.Document(firstPageSize, 0, 0, 0, 0);
+        PdfWriter writer = docListener == null ? PdfWriter.getInstance(doc, os) :
+                PdfWriter.getInstance(doc, os, docListener);
+        if (_pdfVersion != null) {
+            writer.setPdfVersion(_pdfVersion.charValue());
+        }
+        if (_pdfEncryption != null) {
+            writer.setEncryption(_pdfEncryption.getUserPassword(), _pdfEncryption.getOwnerPassword(),
+                    _pdfEncryption.getAllowedPrivileges(), _pdfEncryption.getEncryptionType());
+        }
+        _pdfDoc = doc;
+        _writer = writer;
+    }
+
+    private void initOutputDevice(RenderingContext renderingContext) {
+        // init outputDevice, which emulates "screen" in memory for layout and rendering html
+        // content (and transform it to pdf)
+        PageBox firstPage = (PageBox) _root.getLayer().getPages().get(0);
+        com.lowagie.text.Rectangle firstPageSize = new com.lowagie.text.Rectangle(0, 0, firstPage.getWidth(renderingContext) / _dotsPerPoint,
+                firstPage.getHeight(renderingContext) / _dotsPerPoint);
+
+        _outputDevice.setRoot(_root);
+
+        _outputDevice.start(_doc);
+        _outputDevice.setWriter(_writer);
+        _outputDevice.initializePage(_writer.getDirectContent(), firstPageSize.getHeight());
+    }
+
+    private void writePageByPage(LayoutContext layoutContext, RenderingContext renderingContext,
+            DocListener docListener) {
+        _root.getLayer().assignPagePaintingPositions(renderingContext, Layer.PAGED_MODE_PRINT);
+        List pages = _root.getLayer().getPages();
+
+        int pageCount = pages.size();
+        if(docListener != null) {
+            docListener.setPageCount(pageCount);
+        }
+        renderingContext.setPageCount(pageCount);
+
+        //first page was "layouted" during creation of layout context (in createLayoutContext()), painting it here
+        PageBox currentPage = null;
+        if (pageCount > 0) {
+            currentPage = (PageBox) pages.get(0);
+            renderingContext.setPage(0, currentPage);
+            paintPage(renderingContext, _writer, currentPage);
+            _outputDevice.finishPage();
+        }
+
+        //painting the rest of the pages
+        for (int i = 1; i < pageCount; i++) {
+            currentPage = (PageBox) pages.get(i);
+            //init new page in pdf file
+            com.lowagie.text.Rectangle currentPageSize = new com.lowagie.text.Rectangle(0, 0, currentPage.getWidth(renderingContext) / _dotsPerPoint,
+                    currentPage.getHeight(renderingContext) / _dotsPerPoint);
+            _pdfDoc.setPageSize(currentPageSize);
+            _pdfDoc.newPage();
+            _outputDevice.initializePage(_writer.getDirectContent(), currentPageSize.getHeight());
+
+            //layout page
+            currentPage.layout(layoutContext);
+
+            //render page
+            renderingContext.setPage(i, currentPage);
+            paintPage(renderingContext, _writer, currentPage);
+            _outputDevice.finishPage();
+
+            //cleaning resources
+            currentPage.clear();
+        }
+    }
+
+    public void layoutAndPaint(OutputStream os, DocListener docListener) throws DocumentException {
+        LayoutContext layoutContext = createLayoutContext();
+
+        //layout first page
+        layoutContext.setRootDocumentLayer(layoutContext.getRootLayer());
+        ((PageBox)(_root.getLayer().getPages().get(0))).layout(layoutContext);
+
+        //create and init rendering context
+        RenderingContext renderingContext = newRenderingContext();
+        renderingContext.setInitialPageNo(0);
+
+        initExportEnvironment(renderingContext, os, docListener);
+
+        //open PDF document
+        firePreOpen();
+        _pdfDoc.open();
+
+        initOutputDevice(renderingContext);
+
+        writePageByPage(layoutContext, renderingContext, docListener);
+
+        //finish and close
+        _outputDevice.finish(renderingContext, _root);
+        fireOnClose();
+        _pdfDoc.close();
+    }
+
     private Rectangle getInitialExtents(LayoutContext c) {
         PageBox first = Layer.createPageBox(c, "first");
-        
+
         return new Rectangle(0, 0, first.getContentWidth(c), first.getContentHeight(c));
     }
-    
+
     private RenderingContext newRenderingContext() {
         RenderingContext result = _sharedContext.newRenderingContextInstance();
         result.setFontContext(new ITextFontContext());
-        
-        
+
+
         result.setOutputDevice(_outputDevice);
-        
+
         _sharedContext.getTextRenderer().setup(result.getFontContext());
-        
+
         result.setRootLayer(_root.getLayer());
 
         return result;
@@ -236,66 +357,66 @@ public class ITextRenderer {
     private LayoutContext newLayoutContext() {
         LayoutContext result = _sharedContext.newLayoutContextInstance();
         result.setFontContext(new ITextFontContext());
-        
+
         _sharedContext.getTextRenderer().setup(result.getFontContext());
-        
+
         return result;
     }
-    
+
     public void createPDF(OutputStream os) throws DocumentException {
         createPDF(os, true, 0);
     }
-    
+
     public void writeNextDocument() throws DocumentException {
         writeNextDocument(0);
     }
-    
+
     public void writeNextDocument(int initialPageNo) throws DocumentException {
         List pages = _root.getLayer().getPages();
-        
+
         RenderingContext c = newRenderingContext();
         c.setInitialPageNo(initialPageNo);
         PageBox firstPage = (PageBox)pages.get(0);
         com.lowagie.text.Rectangle firstPageSize = new com.lowagie.text.Rectangle(
-                0, 0, 
-                firstPage.getWidth(c) / _dotsPerPoint, 
+                0, 0,
+                firstPage.getWidth(c) / _dotsPerPoint,
                 firstPage.getHeight(c) / _dotsPerPoint);
-        
+
         _outputDevice.setStartPageNo(_writer.getPageNumber());
-        
+
         _pdfDoc.setPageSize(firstPageSize);
-        _pdfDoc.newPage();  
-        
+        _pdfDoc.newPage();
+
         writePDF(pages, c, firstPageSize, _pdfDoc, _writer);
     }
-    
+
     public void finishPDF() {
         if (_pdfDoc != null) {
             fireOnClose();
             _pdfDoc.close();
         }
     }
-    
+
     public void createPDF(OutputStream os, boolean finish) throws DocumentException {
         createPDF(os, finish, 0);
     }
-    
+
     /**
      * <B>NOTE:</B> Caller is responsible for cleaning up the OutputStream if something
      * goes wrong.
      */
     public void createPDF(OutputStream os, boolean finish, int initialPageNo) throws DocumentException {
         List pages = _root.getLayer().getPages();
-        
+
         RenderingContext c = newRenderingContext();
         c.setInitialPageNo(initialPageNo);
         PageBox firstPage = (PageBox)pages.get(0);
         com.lowagie.text.Rectangle firstPageSize = new com.lowagie.text.Rectangle(
-                0, 0, 
-                firstPage.getWidth(c) / _dotsPerPoint, 
+                0, 0,
+                firstPage.getWidth(c) / _dotsPerPoint,
                 firstPage.getHeight(c) / _dotsPerPoint);
-        
-        com.lowagie.text.Document doc = 
+
+        com.lowagie.text.Document doc =
             new com.lowagie.text.Document(firstPageSize, 0, 0, 0, 0);
         PdfWriter writer = PdfWriter.getInstance(doc, os);
         if (_pdfVersion != null) {
@@ -308,18 +429,18 @@ public class ITextRenderer {
         }
         firePreOpen();
         doc.open();
-        
+
         _pdfDoc = doc;
         _writer = writer;
-        
+
         writePDF(pages, c, firstPageSize, doc, writer);
-        
+
         if (finish) {
             fireOnClose();
             doc.close();
         }
     }
-    
+
     private void firePreOpen() {
         if (_listener != null) {
             _listener.preOpen(this);
@@ -333,13 +454,13 @@ public class ITextRenderer {
 
     private void writePDF(List pages, RenderingContext c, com.lowagie.text.Rectangle firstPageSize, com.lowagie.text.Document doc, PdfWriter writer) throws DocumentException {
         _outputDevice.setRoot(_root);
-        
+
         _outputDevice.start(_doc);
         _outputDevice.setWriter(writer);
         _outputDevice.initializePage(writer.getDirectContent(), firstPageSize.getHeight());
-        
+
         _root.getLayer().assignPagePaintingPositions(c, Layer.PAGED_MODE_PRINT);
-        
+
         int pageCount = _root.getLayer().getPages().size();
         c.setPageCount(pageCount);
         for (int i = 0; i < pageCount; i++) {
@@ -350,8 +471,8 @@ public class ITextRenderer {
             if (i != pageCount - 1) {
                 PageBox nextPage = (PageBox)pages.get(i+1);
                 com.lowagie.text.Rectangle nextPageSize = new com.lowagie.text.Rectangle(
-                        0, 0, 
-                        nextPage.getWidth(c) / _dotsPerPoint, 
+                        0, 0,
+                        nextPage.getWidth(c) / _dotsPerPoint,
                         nextPage.getHeight(c) / _dotsPerPoint);
                 doc.setPageSize(nextPageSize);
                 doc.newPage();
@@ -359,34 +480,34 @@ public class ITextRenderer {
                         writer.getDirectContent(), nextPageSize.getHeight());
             }
         }
-        
+
         _outputDevice.finish(c, _root);
     }
-    
+
     private void paintPage(RenderingContext c, PdfWriter writer, PageBox page) {
         provideMetadataToPage(writer, page);
-        
+
         page.paintBackground(c, 0, Layer.PAGED_MODE_PRINT);
-        page.paintMarginAreas(c, 0, Layer.PAGED_MODE_PRINT);        
+        page.paintMarginAreas(c, 0, Layer.PAGED_MODE_PRINT);
         page.paintBorder(c, 0, Layer.PAGED_MODE_PRINT);
-        
+
         Shape working = _outputDevice.getClip();
-        
+
         Rectangle content = page.getPrintClippingBounds(c);
         _outputDevice.clip(content);
-        
-        int top = -page.getPaintingTop() + 
+
+        int top = -page.getPaintingTop() +
             page.getMarginBorderPadding(c, CalculatedStyle.TOP);
-        
+
         int left = page.getMarginBorderPadding(c, CalculatedStyle.LEFT);
-        
+
         _outputDevice.translate(left, top);
         _root.getLayer().paint(c);
         _outputDevice.translate(-left, -top);
-        
+
         _outputDevice.setClip(working);
     }
-    
+
     private void provideMetadataToPage(PdfWriter writer, PageBox page) {
         byte[] metadata = null;
         if (page.getMetadata() != null) {
@@ -400,7 +521,7 @@ public class ITextRenderer {
                 throw new RuntimeException(e);
             }
         }
-        
+
         writer.setPageXmpMetadata(metadata);
     }
 
@@ -409,14 +530,14 @@ public class ITextRenderer {
         if (target == null) {
             return null;
         }
-        
+
         try {
             TransformerFactory factory = TransformerFactory.newInstance();
             Transformer transformer = factory.newTransformer();
             transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
             StringWriter output = new StringWriter();
             transformer.transform(new DOMSource(target), new StreamResult(output));
-            
+
             return output.toString();
         } catch (TransformerConfigurationException e) {
             // Things must be in pretty bad shape to get here so
@@ -426,7 +547,7 @@ public class ITextRenderer {
             throw new RuntimeException(e);
         }
     }
-    
+
     private static Element getFirstChildElement(Element element) {
         Node n = element.getFirstChild();
         while (n != null) {
@@ -437,38 +558,38 @@ public class ITextRenderer {
         }
         return null;
     }
-    
+
     private String createXPacket(String metadata) {
         StringBuffer result = new StringBuffer(metadata.length() + 50);
         result.append("<?xpacket begin='\uFEFF' id='W5M0MpCehiHzreSzNTczkc9d'?>\n");
         result.append(metadata);
         result.append("\n<?xpacket end='r'?>");
-        
+
         return result.toString();
     }
-    
+
     public ITextOutputDevice getOutputDevice() {
         return _outputDevice;
     }
-    
+
     public SharedContext getSharedContext() {
         return _sharedContext;
     }
-    
+
     public void exportText(Writer writer) throws IOException {
         RenderingContext c = newRenderingContext();
         c.setPageCount(_root.getLayer().getPages().size());
         _root.exportText(c, writer);
     }
-    
+
     public BlockBox getRootBox() {
         return _root;
     }
-    
+
     public float getDotsPerPoint() {
         return _dotsPerPoint;
     }
-    
+
     public List findPagePositionsByID(Pattern pattern) {
         return _outputDevice.findPagePositionsByID(newLayoutContext(), pattern);
     }
@@ -494,7 +615,7 @@ public class ITextRenderer {
     public void setListener(PDFCreationListener listener) {
         _listener = listener;
     }
-    
+
     public PdfWriter getWriter() {
         return _writer;
     }

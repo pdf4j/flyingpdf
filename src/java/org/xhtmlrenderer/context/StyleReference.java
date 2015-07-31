@@ -122,12 +122,16 @@ public class StyleReference {
                 if (sheet == null) {
                     sheet = _stylesheetFactory.getStylesheet(info);
                 }
-                
-                if (sheet.getImportRules().size() > 0) {
-                    result.addAll(readAndParseAll(sheet.getImportRules(), medium));
+
+                //fix for https://code.google.com/p/flying-saucer/issues/detail?id=238&start=100
+                //https://github.com/flyingsaucerproject/flyingsaucer/commit/3fdf5e055fbbd5069adac3bfd27f4ac80c994d38
+                if(sheet != null) {
+                    if (sheet.getImportRules().size() > 0) {
+                        result.addAll(readAndParseAll(sheet.getImportRules(), medium));
+                    }
+
+                    result.add(sheet);
                 }
-                
-                result.add(sheet);
             }
         }
         

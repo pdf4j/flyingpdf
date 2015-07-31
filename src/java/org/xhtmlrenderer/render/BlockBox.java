@@ -117,6 +117,20 @@ public class BlockBox extends Box implements InlinePaintable {
         return result;
     }
 
+    public void clear() {
+        super.clear();
+
+        _markerData = null;
+        _persistentBFC = null;
+        _staticEquivalent = null;
+        _replacedElement = null;
+        _inlineContent = null;
+        _pendingCollapseCalculation = null;
+        _firstLineStyle = null;
+        _firstLetterStyle = null;
+        _floatedBoxData = null;
+    }
+
     protected String getExtraBoxDescription() {
         return "";
     }
