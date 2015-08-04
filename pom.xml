@@ -11,14 +11,12 @@
     <packaging>pom</packaging>
     <distributionManagement>
         <repository>
-            <id>atlassian-m2-repository</id>
-            <name>Atlassian Public Repository</name>
-            <url>https://maven.atlassian.com/public</url>
+            <id>atlassian-3rdparty</id>
+            <url>https://maven.atlassian.com/3rdparty</url>
         </repository>
         <snapshotRepository>
-            <id>atlassian-private-snapshot</id>
-            <name>Atlassian Private Snapshot Repository</name>
-            <url>https://maven.atlassian.com/private-snapshot</url>
+            <id>atlassian-3rdparty-snapshot</id>
+            <url>https://maven.atlassian.com/3rdparty-snapshot</url>
         </snapshotRepository>
     </distributionManagement>
 
