@@ -893,6 +893,17 @@ public class BoxBuilder {
                 if (calculatedStyle.isIdent(CSSName.CONTENT, IdentValue.NONE)) return;
                 if (calculatedStyle.isIdent(CSSName.CONTENT, IdentValue.NORMAL) && (peName.equals("before") || peName.equals("after")))
                     return;
+
+                // fix for CONF-34275
+                // cherry-pick from https://github.com/flyingsaucerproject/flyingsaucer/pull/30/files
+                if (calculatedStyle.isTable() || calculatedStyle.isTableRow() || calculatedStyle.isTableSection()) {
+                    CascadedStyle newPeStyle = CascadedStyle.createLayoutStyle(peStyle, new PropertyDeclaration[] {
+                        CascadedStyle.createLayoutPropertyDeclaration(CSSName.DISPLAY, IdentValue.BLOCK),
+                    });
+                    calculatedStyle = parentStyle.deriveStyle(newPeStyle);
+                }
+                // end cherry-pick
+
                 c.resolveCounters(calculatedStyle);
             }
 
