@@ -7,7 +7,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.xhtmlrenderer</groupId>
     <artifactId>xhtmlrenderer</artifactId>
-    <version>8.7-atlassian-SNAPSHOT</version>   
+    <version>8.7-atlassian-02-SNAPSHOT</version>   
     <packaging>pom</packaging>
     <distributionManagement>
         <repository>
